@@ -1,5 +1,7 @@
 use core::result;
+use serde_json::map::Map;
 use serde_json::{Result, Value};
+use std::collections::HashSet;
 use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
@@ -16,8 +18,20 @@ fn main() {
                 "+44 2345678"
             ]
         }"#;
-    let json = read_json_str(data);
-    pattern_match(&json.unwrap())
+    let data1 = r#"
+        {
+            "name": "John Doe bill",
+            "age": 43,
+            "phones": [
+                "+44 1234567",
+                "+44 2345678"
+            ]
+        }"#;
+    let json = read_json_str(data).unwrap();
+    let json1 = read_json_str(data1).unwrap();
+    let diffs = Vec::new();
+    let diffs = diff_json(&json, &json1, diffs);
+    println!("{:?}", diffs);
 }
 
 fn read_json_str(s: &str) -> Result<Value> {
@@ -45,4 +59,60 @@ fn pattern_match(v: &Value) {
             o.values().for_each(pattern_match);
         }
     }
+}
+
+// TODO: use reference not own
+#[derive(Debug)]
+struct DiffElem {
+    old_val: Value,
+    new_val: Value,
+}
+
+fn diff_json(jval0: &Value, jval1: &Value, mut diffs: Vec<DiffElem>) -> Vec<DiffElem> {
+    match (jval0, jval1) {
+        (Value::Null, Value::Null) => diffs,
+        (Value::Bool(b0), Value::Bool(b1)) if b0 == b1 => diffs,
+        (Value::Number(n0), Value::Number(n1)) if n0 == n1 => diffs,
+        (Value::String(s0), Value::String(s1)) if s0 == s1 => diffs,
+        (Value::Object(m0), Value::Object(m1)) => diff_json_map(m0, m1, diffs),
+        (a0, a1) => {
+            diffs.push(DiffElem {
+                old_val: jval0.clone(),
+                new_val: jval1.clone(),
+            });
+            diffs
+        }
+        (_, _) => diffs,
+    }
+}
+
+fn diff_json_map(
+    m0: &Map<String, Value>,
+    m1: &Map<String, Value>,
+    mut diffs: Vec<DiffElem>,
+) -> Vec<DiffElem> {
+    for (k, v0) in m0.iter() {
+        if let Some(v1) = m1.get(k) {
+            diffs = diff_json(v0, v1, diffs)
+        }
+    }
+    let keys0: HashSet<String> = m0.keys().cloned().collect();
+    let keys1: HashSet<String> = m1.keys().cloned().collect();
+    let keys_only_in_m0 = keys0.difference(&keys1);
+    let keys_only_in_m1 = keys1.difference(&keys0);
+
+    for k in keys_only_in_m0 {
+        diffs.push(DiffElem {
+            old_val: m0.get(k).unwrap().clone(),
+            new_val: Value::Null,
+        })
+    }
+
+    for k in keys_only_in_m1 {
+        diffs.push(DiffElem {
+            old_val: Value::Null,
+            new_val: m1.get(k).unwrap().clone(),
+        })
+    }
+    diffs
 }
