@@ -15,7 +15,8 @@ fn main() {
             "age": 43,
             "phones": [
                 "+44 1234567",
-                "+44 2345678"
+                "+44 2345678",
+                "xxx"
             ]
         }"#;
     let data1 = r#"
@@ -25,7 +26,8 @@ fn main() {
             "phones": [
                 "+44 1234567",
                 "+44 2345678"
-            ]
+            ],
+            "key0": "name1"
         }"#;
     let json = read_json_str(data).unwrap();
     let json1 = read_json_str(data1).unwrap();
@@ -75,6 +77,7 @@ fn diff_json(jval0: &Value, jval1: &Value, mut diffs: Vec<DiffElem>) -> Vec<Diff
         (Value::Number(n0), Value::Number(n1)) if n0 == n1 => diffs,
         (Value::String(s0), Value::String(s1)) if s0 == s1 => diffs,
         (Value::Object(m0), Value::Object(m1)) => diff_json_map(m0, m1, diffs),
+        (Value::Array(v0), Value::Array(v1)) => diff_json_arr(v0.as_slice(), v1.as_slice(), diffs),
         (a0, a1) => {
             diffs.push(DiffElem {
                 old_val: jval0.clone(),
@@ -113,6 +116,34 @@ fn diff_json_map(
             old_val: Value::Null,
             new_val: m1.get(k).unwrap().clone(),
         })
+    }
+    diffs
+}
+
+fn diff_json_arr(v0: &[Value], v1: &[Value], mut diffs: Vec<DiffElem>) -> Vec<DiffElem> {
+    let len0 = v0.len();
+    let len1 = v1.len();
+    let min_len = len0.min(len1);
+    for i in 0..min_len {
+        diffs = diff_json(&v0[i], &v1[i], diffs);
+    }
+    if len0 >= len1 {
+        let subv = &v0[len1..];
+        println!("subv0 len0 {} len1 {} {:?}", len0, len1, subv);
+        for v in subv.iter() {
+            diffs.push(DiffElem {
+                old_val: v.clone(),
+                new_val: Value::Null,
+            })
+        }
+    } else {
+        let subv = &v1[len0..];
+        for v in subv.iter() {
+            diffs.push(DiffElem {
+                old_val: Value::Null,
+                new_val: v.clone(),
+            })
+        }
     }
     diffs
 }
