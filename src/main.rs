@@ -49,20 +49,6 @@ fn read_json_file<P: AsRef<Path>>(path: P) -> result::Result<Value, Box<dyn Erro
     Ok(v)
 }
 
-fn pattern_match(v: &Value) {
-    match v {
-        Value::Null => println!("null"),
-        Value::Bool(b) => println!("bool {}", b),
-        Value::Array(arr) => arr.iter().for_each(pattern_match),
-        Value::Number(n) => println!("number {}", n),
-        Value::String(s) => println!("string {}", s),
-        Value::Object(o) => {
-            println!("map");
-            o.values().for_each(pattern_match);
-        }
-    }
-}
-
 // TODO: use reference not own
 #[derive(Debug)]
 struct DiffElem {
@@ -78,14 +64,14 @@ fn diff_json(jval0: &Value, jval1: &Value, mut diffs: Vec<DiffElem>) -> Vec<Diff
         (Value::String(s0), Value::String(s1)) if s0 == s1 => diffs,
         (Value::Object(m0), Value::Object(m1)) => diff_json_map(m0, m1, diffs),
         (Value::Array(v0), Value::Array(v1)) => diff_json_arr(v0.as_slice(), v1.as_slice(), diffs),
-        (a0, a1) => {
+        (_, _) => {
+            // not equal case
             diffs.push(DiffElem {
                 old_val: jval0.clone(),
                 new_val: jval1.clone(),
             });
             diffs
         }
-        (_, _) => diffs,
     }
 }
 
@@ -117,19 +103,19 @@ fn diff_json_map(
             new_val: m1.get(k).unwrap().clone(),
         })
     }
+
     diffs
 }
 
-fn diff_json_arr(v0: &[Value], v1: &[Value], mut diffs: Vec<DiffElem>) -> Vec<DiffElem> {
-    let len0 = v0.len();
-    let len1 = v1.len();
+fn diff_json_arr(arr0: &[Value], arr1: &[Value], mut diffs: Vec<DiffElem>) -> Vec<DiffElem> {
+    let len0 = arr0.len();
+    let len1 = arr1.len();
     let min_len = len0.min(len1);
     for i in 0..min_len {
-        diffs = diff_json(&v0[i], &v1[i], diffs);
+        diffs = diff_json(&arr0[i], &arr1[i], diffs);
     }
     if len0 >= len1 {
-        let subv = &v0[len1..];
-        println!("subv0 len0 {} len1 {} {:?}", len0, len1, subv);
+        let subv = &arr0[len1..];
         for v in subv.iter() {
             diffs.push(DiffElem {
                 old_val: v.clone(),
@@ -137,7 +123,7 @@ fn diff_json_arr(v0: &[Value], v1: &[Value], mut diffs: Vec<DiffElem>) -> Vec<Di
             })
         }
     } else {
-        let subv = &v1[len0..];
+        let subv = &arr1[len0..];
         for v in subv.iter() {
             diffs.push(DiffElem {
                 old_val: Value::Null,
