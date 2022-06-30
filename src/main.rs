@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
-use std::path::Path;
+use std::path;
 
 fn main() {
     println!("Hello, world!");
@@ -42,18 +42,26 @@ fn read_json_str(s: &str) -> Result<Value> {
     Ok(v)
 }
 
-fn read_json_file<P: AsRef<Path>>(path: P) -> result::Result<Value, Box<dyn Error>> {
+fn read_json_file<P: AsRef<path::Path>>(path: P) -> result::Result<Value, Box<dyn Error>> {
     let f = File::open(path)?;
     let reader = BufReader::new(f);
     let v = serde_json::from_reader(reader)?;
     Ok(v)
 }
 
+#[derive(Debug, Clone)]
+enum PathElem {
+    Key(String),
+    Index(usize),
+}
+
+type Path = Vec<PathElem>;
+
 // TODO: use reference not own
 #[derive(Debug)]
 struct DiffElem {
     diff: DiffChange,
-    path: Vec<String>,
+    path: Path,
 }
 
 #[derive(Debug)]
@@ -63,12 +71,7 @@ enum DiffChange {
     Remove(Value),
 }
 
-fn diff_json(
-    jval0: &Value,
-    jval1: &Value,
-    mut diffs: Vec<DiffElem>,
-    path: Vec<String>,
-) -> Vec<DiffElem> {
+fn diff_json(jval0: &Value, jval1: &Value, mut diffs: Vec<DiffElem>, path: Path) -> Vec<DiffElem> {
     match (jval0, jval1) {
         (Value::Null, Value::Null) => diffs,
         (Value::Bool(b0), Value::Bool(b1)) if b0 == b1 => diffs,
@@ -96,12 +99,12 @@ fn diff_json_map(
     m0: &Map<String, Value>,
     m1: &Map<String, Value>,
     mut diffs: Vec<DiffElem>,
-    path: Vec<String>,
+    path: Path,
 ) -> Vec<DiffElem> {
     for (k, v0) in m0.iter() {
         if let Some(v1) = m1.get(k) {
             let mut new_path = path.clone();
-            new_path.push(k.to_string());
+            new_path.push(PathElem::Key(k.to_string()));
             diffs = diff_json(v0, v1, diffs, new_path);
         }
     }
@@ -112,7 +115,7 @@ fn diff_json_map(
 
     for k in keys_only_in_m0 {
         let mut new_path = path.clone();
-        new_path.push(k.to_string());
+        new_path.push(PathElem::Key(k.to_string()));
         diffs.push(DiffElem {
             diff: DiffChange::Remove(m0.get(k).unwrap().clone()),
             path: new_path,
@@ -121,7 +124,7 @@ fn diff_json_map(
 
     for k in keys_only_in_m1 {
         let mut new_path = path.clone();
-        new_path.push(k.to_string());
+        new_path.push(PathElem::Key(k.to_string()));
         diffs.push(DiffElem {
             diff: DiffChange::Add(m1.get(k).unwrap().clone()),
             path: new_path,
@@ -135,28 +138,36 @@ fn diff_json_arr(
     arr0: &[Value],
     arr1: &[Value],
     mut diffs: Vec<DiffElem>,
-    path: Vec<String>,
+    path: Path,
 ) -> Vec<DiffElem> {
     let len0 = arr0.len();
     let len1 = arr1.len();
     let min_len = len0.min(len1);
     for i in 0..min_len {
-        diffs = diff_json(&arr0[i], &arr1[i], diffs, path.clone());
+        let mut new_path = path.clone();
+        new_path.push(PathElem::Index(i));
+        diffs = diff_json(&arr0[i], &arr1[i], diffs, new_path);
     }
     if len0 >= len1 {
         let subv = &arr0[len1..];
-        for v in subv.iter() {
+        for (i, v) in subv.iter().enumerate() {
+            let mut new_path = path.clone();
+            let original_idx = i + len1;
+            new_path.push(PathElem::Index(original_idx));
             diffs.push(DiffElem {
                 diff: DiffChange::Remove(v.clone()),
-                path: path.clone(),
+                path: new_path,
             })
         }
     } else {
         let subv = &arr1[len0..];
-        for v in subv.iter() {
+        for (i, v) in subv.iter().enumerate() {
+            let mut new_path = path.clone();
+            let original_idx = i + len0;
+            new_path.push(PathElem::Index(original_idx));
             diffs.push(DiffElem {
                 diff: DiffChange::Add(v.clone()),
-                path: path.clone(),
+                path: new_path,
             })
         }
     }
