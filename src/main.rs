@@ -52,9 +52,15 @@ fn read_json_file<P: AsRef<Path>>(path: P) -> result::Result<Value, Box<dyn Erro
 // TODO: use reference not own
 #[derive(Debug)]
 struct DiffElem {
-    old_val: Value,
-    new_val: Value,
+    diff: DiffChange,
     path: Vec<String>,
+}
+
+#[derive(Debug)]
+enum DiffChange {
+    Replace { old_val: Value, new_val: Value },
+    Add(Value),
+    Remove(Value),
 }
 
 fn diff_json(
@@ -75,8 +81,10 @@ fn diff_json(
         (_, _) => {
             // not equal case
             diffs.push(DiffElem {
-                old_val: jval0.clone(),
-                new_val: jval1.clone(),
+                diff: DiffChange::Replace {
+                    old_val: jval0.clone(),
+                    new_val: jval1.clone(),
+                },
                 path: path,
             });
             diffs
@@ -106,8 +114,7 @@ fn diff_json_map(
         let mut new_path = path.clone();
         new_path.push(k.to_string());
         diffs.push(DiffElem {
-            old_val: m0.get(k).unwrap().clone(),
-            new_val: Value::Null,
+            diff: DiffChange::Remove(m0.get(k).unwrap().clone()),
             path: new_path,
         })
     }
@@ -116,8 +123,7 @@ fn diff_json_map(
         let mut new_path = path.clone();
         new_path.push(k.to_string());
         diffs.push(DiffElem {
-            old_val: Value::Null,
-            new_val: m1.get(k).unwrap().clone(),
+            diff: DiffChange::Add(m1.get(k).unwrap().clone()),
             path: new_path,
         })
     }
@@ -141,8 +147,7 @@ fn diff_json_arr(
         let subv = &arr0[len1..];
         for v in subv.iter() {
             diffs.push(DiffElem {
-                old_val: v.clone(),
-                new_val: Value::Null,
+                diff: DiffChange::Remove(v.clone()),
                 path: path.clone(),
             })
         }
@@ -150,8 +155,7 @@ fn diff_json_arr(
         let subv = &arr1[len0..];
         for v in subv.iter() {
             diffs.push(DiffElem {
-                old_val: Value::Null,
-                new_val: v.clone(),
+                diff: DiffChange::Add(v.clone()),
                 path: path.clone(),
             })
         }
