@@ -49,7 +49,7 @@ fn read_json_file<P: AsRef<path::Path>>(path: P) -> result::Result<Value, Box<dy
     Ok(v)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum PathElem {
     Key(String),
     Index(usize),
@@ -58,13 +58,13 @@ enum PathElem {
 type Path = Vec<PathElem>;
 
 // TODO: use reference not own
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 struct DiffElem {
     diff: DiffChange,
     path: Path,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum DiffChange {
     Replace { old_val: Value, new_val: Value },
     Add(Value),
@@ -172,4 +172,53 @@ fn diff_json_arr(
         }
     }
     diffs
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::diff_json;
+    use crate::read_json_str;
+    use crate::DiffChange;
+    use crate::DiffElem;
+    use crate::PathElem;
+    use crate::Value;
+
+    fn check_diff(original: &str, dest: &str, expect_diff: Vec<DiffElem>) {
+        let origin_json = read_json_str(original);
+        assert!(origin_json.is_ok(), "origin json not valid");
+        let dest_json = read_json_str(dest);
+        assert!(dest_json.is_ok(), "origin json not valid");
+        let origin_json = origin_json.unwrap();
+        let dest_json = dest_json.unwrap();
+        let actual_diff = diff_json(&origin_json, &dest_json, vec![], vec![]);
+        assert_eq!(actual_diff, expect_diff);
+    }
+
+    fn check_diff_same(original: &str, dest: &str) {
+        check_diff(original, dest, vec![]);
+    }
+
+    #[test]
+    fn test_bool() {
+        let s0 = r#"{"x": true}"#;
+        let s1 = r#"{"x": true}"#;
+        check_diff_same(s0, s1);
+
+        let s0 = r#"{"x": false}"#;
+        let s1 = r#"{"x": false}"#;
+        check_diff_same(s0, s1);
+
+        let s0 = r#"{"x": true}"#;
+        let s1 = r#"{"x": false}"#;
+
+        let diff = DiffElem {
+            diff: DiffChange::Replace {
+                old_val: Value::Bool(true),
+                new_val: Value::Bool(false),
+            },
+            path: vec![PathElem::Key("x".to_string())],
+        };
+
+        check_diff(s0, s1, vec![diff])
+    }
 }
