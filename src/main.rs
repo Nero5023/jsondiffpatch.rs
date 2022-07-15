@@ -174,7 +174,7 @@ fn diff_json_arr(
     diffs
 }
 
-fn lcs<T: PartialEq + std::fmt::Debug>(arr0: &[T], arr1: &[T]) -> Vec<(usize, usize)> {
+fn lcs<T: PartialEq>(arr0: &[T], arr1: &[T]) -> Vec<(usize, usize)> {
     let len0 = arr0.len();
     let len1 = arr1.len();
     let mut dp = vec![vec![0; len1 + 1]; len0 + 1];
