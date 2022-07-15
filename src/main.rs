@@ -174,9 +174,44 @@ fn diff_json_arr(
     diffs
 }
 
+fn lcs<T: PartialEq + std::fmt::Debug>(arr0: &[T], arr1: &[T]) -> Vec<(usize, usize)> {
+    let len0 = arr0.len();
+    let len1 = arr1.len();
+    let mut dp = vec![vec![0; len1 + 1]; len0 + 1];
+    for (i, v0) in arr0.iter().enumerate() {
+        for (j, v1) in arr1.iter().enumerate() {
+            if v0 == v1 {
+                dp[i + 1][j + 1] = dp[i][j] + 1;
+            } else {
+                dp[i + 1][j + 1] = dp[i + 1][j].max(dp[i][j + 1]);
+            }
+        }
+    }
+
+    let mut i = len0;
+    let mut j = len1;
+    let mut res = vec![];
+    while i > 0 && j > 0 {
+        if dp[i][j] == dp[i - 1][j] {
+            i -= 1;
+        } else if dp[i][j] == dp[i][j - 1] {
+            j -= 1;
+        } else {
+            assert!(arr0[i - 1] == arr1[j - 1]);
+            res.push((i - 1, j - 1));
+            i -= 1;
+            j -= 1;
+        }
+    }
+
+    res.reverse();
+    res
+}
+
 #[cfg(test)]
 mod tests {
     use crate::diff_json;
+    use crate::lcs;
     use crate::read_json_str;
     use crate::DiffChange;
     use crate::DiffElem;
@@ -220,5 +255,13 @@ mod tests {
         };
 
         check_diff(s0, s1, vec![diff])
+    }
+
+    #[test]
+    fn test_lcs() {
+        let arr0: Vec<char> = "abcde".chars().collect();
+        let arr1: Vec<char> = "ace".chars().collect();
+        let res = lcs(&arr0, &arr1);
+        assert_eq!(res, vec![(0, 0), (2, 1), (4, 2)]);
     }
 }
