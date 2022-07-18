@@ -17,7 +17,8 @@ fn main() {
                 "+44 1234567",
                 "+44 2345678",
                 "xxx"
-            ]
+            ],
+            "c": ["1","a", "c", "e", "f"]
         }"#;
     let data1 = r#"
         {
@@ -27,8 +28,11 @@ fn main() {
                 "+44 1234567",
                 "+44 2345678"
             ],
-            "key0": "name1"
+            "key0": "name1",
+            "c": ["2", "3", "a", "b", "c", "d", "e"]
         }"#;
+    let data = r#"{"c": ["1","a", "c", "e", "f"]}"#;
+    let data1 = r#"{"c": ["2", "3", "a", "b", "c", "d", "e"]}"#;
     let json = read_json_str(data).unwrap();
     let json1 = read_json_str(data1).unwrap();
     let diffs = Vec::new();
@@ -79,7 +83,7 @@ fn diff_json(jval0: &Value, jval1: &Value, mut diffs: Vec<DiffElem>, path: Path)
         (Value::String(s0), Value::String(s1)) if s0 == s1 => diffs,
         (Value::Object(m0), Value::Object(m1)) => diff_json_map(m0, m1, diffs, path),
         (Value::Array(v0), Value::Array(v1)) => {
-            diff_json_arr(v0.as_slice(), v1.as_slice(), diffs, path)
+            diff_json_arr_lcs(v0.as_slice(), v1.as_slice(), diffs, path)
         }
         (_, _) => {
             // not equal case
@@ -171,6 +175,109 @@ fn diff_json_arr(
             })
         }
     }
+    diffs
+}
+
+fn diff_json_arr_lcs(
+    arr0: &[Value],
+    arr1: &[Value],
+    mut diffs: Vec<DiffElem>,
+    path: Path,
+) -> Vec<DiffElem> {
+    let mut lcs_pairs = lcs(arr0, arr1);
+    let mut idx0 = 0;
+    let mut idx1 = 0;
+    let mut shift_idx = 0;
+
+    lcs_pairs.reverse();
+
+    while !lcs_pairs.is_empty() {
+        let same_idx_pair = lcs_pairs.last().unwrap();
+        assert!(idx0 <= same_idx_pair.0);
+        assert!(idx1 <= same_idx_pair.1);
+        if idx0 == same_idx_pair.0 && idx1 == same_idx_pair.1 {
+            // do nothing
+            lcs_pairs.pop();
+            shift_idx += 1;
+            idx0 += 1;
+            idx1 += 1;
+        } else if idx0 < same_idx_pair.0 && idx1 < same_idx_pair.1 {
+            // replace
+            let mut new_path = path.clone();
+            new_path.push(PathElem::Index(shift_idx));
+            diffs.push(DiffElem {
+                diff: DiffChange::Replace {
+                    old_val: arr0[idx0].clone(),
+                    new_val: arr1[idx1].clone(),
+                },
+                path: new_path,
+            });
+            shift_idx += 1;
+            idx0 += 1;
+            idx1 += 1;
+        } else if idx0 < same_idx_pair.0 && idx1 == same_idx_pair.1 {
+            // remove val in arr0
+            let mut new_path = path.clone();
+            new_path.push(PathElem::Index(shift_idx));
+            diffs.push(DiffElem {
+                diff: DiffChange::Remove(arr0[idx0].clone()),
+                path: new_path,
+            });
+            idx0 += 1;
+        } else if idx0 == same_idx_pair.0 && idx1 < same_idx_pair.1 {
+            // add val in arr1
+            let mut new_path = path.clone();
+            new_path.push(PathElem::Index(shift_idx));
+            diffs.push(DiffElem {
+                diff: DiffChange::Add(arr1[idx1].clone()),
+                path: new_path,
+            });
+            idx1 += 1;
+            shift_idx += 1;
+        }
+    }
+
+    let len0 = arr0.len();
+    let len1 = arr1.len();
+    while idx0 < len0 && idx1 < len1 {
+        // replace
+        let mut new_path = path.clone();
+        new_path.push(PathElem::Index(shift_idx));
+        diffs.push(DiffElem {
+            diff: DiffChange::Replace {
+                old_val: arr0[idx0].clone(),
+                new_val: arr1[idx1].clone(),
+            },
+            path: new_path,
+        });
+        shift_idx += 1;
+        idx0 += 1;
+        idx1 += 1;
+    }
+
+    while idx0 < len0 {
+        // remove val in arr0
+        let mut new_path = path.clone();
+        new_path.push(PathElem::Index(shift_idx));
+        diffs.push(DiffElem {
+            diff: DiffChange::Remove(arr0[idx0].clone()),
+            path: new_path,
+        });
+        idx0 += 1;
+    }
+
+    while idx1 < len1 {
+        // add val in arr1
+        let mut new_path = path.clone();
+        new_path.push(PathElem::Index(shift_idx));
+        diffs.push(DiffElem {
+            diff: DiffChange::Add(arr1[idx1].clone()),
+            path: new_path,
+        });
+        idx1 += 1;
+        shift_idx += 1;
+    }
+
     diffs
 }
 
