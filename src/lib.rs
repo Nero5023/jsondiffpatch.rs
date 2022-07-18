@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path;
 
-pub fn read_json_str(s: &str) -> Result<Value> {
+fn read_json_str(s: &str) -> Result<Value> {
     let v: Value = serde_json::from_str(s)?;
     println!("{}", v);
     Ok(v)
@@ -75,17 +75,21 @@ impl JsonArrDiff {
     }
 }
 
-pub fn diff_json(jval0: &Value, jval1: &Value, diffs: Vec<DiffElem>, path: Path) -> Vec<DiffElem> {
-    diff_json_inner(jval0, jval1, diffs, path, &JsonArrDiff::Lcs)
+pub fn diff_json(json0: &str, json1: &str) -> Option<Vec<DiffElem>> {
+    diff_json_str(json0, json1, JsonArrDiff::Lcs)
 }
 
-pub fn diff_json_simple(
-    jval0: &Value,
-    jval1: &Value,
-    diffs: Vec<DiffElem>,
-    path: Path,
-) -> Vec<DiffElem> {
-    diff_json_inner(jval0, jval1, diffs, path, &JsonArrDiff::Simple)
+pub fn diff_json_simple(json0: &str, json1: &str) -> Option<Vec<DiffElem>> {
+    diff_json_str(json0, json1, JsonArrDiff::Simple)
+}
+
+fn diff_json_str(json0: &str, json1: &str, arr_diff: JsonArrDiff) -> Option<Vec<DiffElem>> {
+    let path = vec![];
+    let diffs = Vec::new();
+    let json0 = read_json_str(json0).ok()?;
+    let json1 = read_json_str(json1).ok()?;
+    let diffs = diff_json_inner(&json0, &json1, diffs, path, &arr_diff);
+    Some(diffs)
 }
 
 fn diff_json_inner(
@@ -310,9 +314,7 @@ mod tests {
         assert!(origin_json.is_ok(), "origin json not valid");
         let dest_json = read_json_str(dest);
         assert!(dest_json.is_ok(), "origin json not valid");
-        let origin_json = origin_json.unwrap();
-        let dest_json = dest_json.unwrap();
-        let actual_diff = diff_json(&origin_json, &dest_json, vec![], vec![]);
+        let actual_diff = diff_json(original, dest).unwrap();
         assert_eq!(actual_diff, expect_diff);
     }
 

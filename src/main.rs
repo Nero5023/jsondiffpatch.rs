@@ -1,5 +1,4 @@
 use json_diff_patch::diff_json;
-use json_diff_patch::read_json_str;
 
 fn main() {
     let data = r#"
@@ -24,9 +23,6 @@ fn main() {
             "key0": "name1",
             "c": ["2", "3", "a", "b", "c", "d", "e"]
         }"#;
-    let json = read_json_str(data).unwrap();
-    let json1 = read_json_str(data1).unwrap();
-    let diffs = Vec::new();
-    let diffs = diff_json(&json, &json1, diffs, vec![]);
+    let diffs = diff_json(data, data1);
     println!("{:?}", diffs);
 }
