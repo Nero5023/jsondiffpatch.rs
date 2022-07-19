@@ -11,7 +11,6 @@ use std::path;
 
 fn read_json_str(s: &str) -> Result<Value> {
     let v: Value = serde_json::from_str(s)?;
-    println!("{}", v);
     Ok(v)
 }
 
@@ -170,7 +169,7 @@ fn diff_json_arr_lcs(
     mut diffs: Vec<DiffElem>,
     path: Path,
 ) -> Vec<DiffElem> {
-    let mut lcs_pairs = lcs::lcs(arr1, arr1);
+    let mut lcs_pairs = lcs::lcs(arr0, arr1);
     let mut idx0 = 0;
     let mut idx1 = 0;
     let mut shift_idx = 0;
@@ -275,6 +274,7 @@ mod tests {
     use crate::DiffElem;
     use crate::PathElem;
     use crate::Value;
+    use serde_json::Number;
 
     fn check_diff(original: &str, dest: &str, mut expect_diff: Vec<DiffElem>) {
         let origin_json = read_json_str(original);
@@ -416,6 +416,37 @@ mod tests {
                 DiffElem {
                     diff: DiffChange::Remove(Value::Null),
                     path: vec![PathElem::Key("c".to_string())],
+                },
+            ],
+        );
+    }
+
+    #[test]
+    fn test_arr_diff() {
+        let json1 = r#"{"a": [1, 2, 3, 6, 7, 8, 9, 10]}"#;
+        let json2 = r#"{"a": [0, 1, 3, 7, 8, 9, 13]}"#;
+        check_diff(
+            json1,
+            json2,
+            vec![
+                DiffElem {
+                    diff: DiffChange::Add(Value::Number(Number::from(0))),
+                    path: vec![PathElem::Key("a".to_owned()), PathElem::Index(0)],
+                },
+                DiffElem {
+                    diff: DiffChange::Remove(Value::Number(Number::from(2))),
+                    path: vec![PathElem::Key("a".to_owned()), PathElem::Index(2)],
+                },
+                DiffElem {
+                    diff: DiffChange::Remove(Value::Number(Number::from(6))),
+                    path: vec![PathElem::Key("a".to_owned()), PathElem::Index(3)],
+                },
+                DiffElem {
+                    diff: DiffChange::Replace {
+                        old_val: Value::Number(Number::from(10)),
+                        new_val: Value::Number(Number::from(13)),
+                    },
+                    path: vec![PathElem::Key("a".to_owned()), PathElem::Index(6)],
                 },
             ],
         );
