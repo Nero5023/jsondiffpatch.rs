@@ -22,7 +22,7 @@ fn read_json_file<P: AsRef<path::Path>>(path: P) -> result::Result<Value, Box<dy
     Ok(v)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub enum PathElem {
     Key(String),
     Index(usize),
@@ -276,12 +276,14 @@ mod tests {
     use crate::PathElem;
     use crate::Value;
 
-    fn check_diff(original: &str, dest: &str, expect_diff: Vec<DiffElem>) {
+    fn check_diff(original: &str, dest: &str, mut expect_diff: Vec<DiffElem>) {
         let origin_json = read_json_str(original);
         assert!(origin_json.is_ok(), "origin json not valid");
         let dest_json = read_json_str(dest);
         assert!(dest_json.is_ok(), "origin json not valid");
-        let actual_diff = diff_json(original, dest).unwrap();
+        let mut actual_diff = diff_json(original, dest).unwrap();
+        actual_diff.sort_by(|a, b| a.path.partial_cmp(&b.path).unwrap());
+        expect_diff.sort_by(|a, b| a.path.partial_cmp(&b.path).unwrap());
         assert_eq!(actual_diff, expect_diff);
     }
 
@@ -311,5 +313,111 @@ mod tests {
         };
 
         check_diff(s0, s1, vec![diff])
+    }
+
+    #[test]
+    fn test_same_json() {
+        let json = "true";
+        check_diff(json, json, vec![]);
+    }
+
+    #[test]
+    fn test_add_op() {
+        let json1 = r#"{"a": 1}"#;
+        let json2 = r#"{"a": 1, "new": false}"#;
+        let json3 = r#"{"a": 1, "new1": false, "new2": null}"#;
+        let json4 = r#"{"a": 1, "b": {"a": true}}"#;
+        let json5 = r#"{"a": 1, "b": {"a": true, "b": "new_val"}, "c": null}"#;
+        check_diff(
+            json1,
+            json2,
+            vec![DiffElem {
+                diff: DiffChange::Add(Value::Bool(false)),
+                path: vec![PathElem::Key("new".to_string())],
+            }],
+        );
+
+        check_diff(
+            json1,
+            json3,
+            vec![
+                DiffElem {
+                    diff: DiffChange::Add(Value::Bool(false)),
+                    path: vec![PathElem::Key("new1".to_string())],
+                },
+                DiffElem {
+                    diff: DiffChange::Add(Value::Null),
+                    path: vec![PathElem::Key("new2".to_string())],
+                },
+            ],
+        );
+
+        check_diff(
+            json4,
+            json5,
+            vec![
+                DiffElem {
+                    diff: DiffChange::Add(Value::String("new_val".to_string())),
+                    path: vec![
+                        PathElem::Key("b".to_string()),
+                        PathElem::Key("b".to_string()),
+                    ],
+                },
+                DiffElem {
+                    diff: DiffChange::Add(Value::Null),
+                    path: vec![PathElem::Key("c".to_string())],
+                },
+            ],
+        );
+    }
+
+    #[test]
+    fn test_remove() {
+        let json1 = r#"{"a": 1}"#;
+        let json2 = r#"{"a": 1, "old": false}"#;
+        let json3 = r#"{"a": 1, "old1": false, "old2": null}"#;
+        let json4 = r#"{"a": 1, "b": {"a": true}}"#;
+        let json5 = r#"{"a": 1, "b": {"a": true, "b": "old_val"}, "c": null}"#;
+        check_diff(
+            json2,
+            json1,
+            vec![DiffElem {
+                diff: DiffChange::Remove(Value::Bool(false)),
+                path: vec![PathElem::Key("old".to_string())],
+            }],
+        );
+
+        check_diff(
+            json3,
+            json1,
+            vec![
+                DiffElem {
+                    diff: DiffChange::Remove(Value::Bool(false)),
+                    path: vec![PathElem::Key("old1".to_string())],
+                },
+                DiffElem {
+                    diff: DiffChange::Remove(Value::Null),
+                    path: vec![PathElem::Key("old2".to_string())],
+                },
+            ],
+        );
+
+        check_diff(
+            json5,
+            json4,
+            vec![
+                DiffElem {
+                    diff: DiffChange::Remove(Value::String("old_val".to_string())),
+                    path: vec![
+                        PathElem::Key("b".to_string()),
+                        PathElem::Key("b".to_string()),
+                    ],
+                },
+                DiffElem {
+                    diff: DiffChange::Remove(Value::Null),
+                    path: vec![PathElem::Key("c".to_string())],
+                },
+            ],
+        );
     }
 }
