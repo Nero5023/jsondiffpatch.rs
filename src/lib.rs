@@ -5,6 +5,7 @@ use serde_json::map::Map;
 use serde_json::{Result, Value};
 use std::collections::HashSet;
 use std::error::Error;
+use std::fmt::Display;
 use std::fs::File;
 use std::io::BufReader;
 use std::path;
@@ -27,6 +28,21 @@ pub enum PathElem {
     Index(usize),
 }
 
+impl Display for PathElem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PathElem::Key(s) => {
+                if s.starts_with('_') {
+                    write!(f, "\\{}", s)
+                } else {
+                    write!(f, "{}", s)
+                }
+            }
+            PathElem::Index(idx) => write!(f, "_{}", idx),
+        }
+    }
+}
+
 type Path = Vec<PathElem>;
 
 // TODO: use reference not own
@@ -34,6 +50,38 @@ type Path = Vec<PathElem>;
 pub struct DiffElem {
     diff: DiffChange,
     path: Path,
+}
+
+impl Display for DiffElem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let path = "/".to_owned()
+            + &self
+                .path
+                .iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<String>>()
+                .join("/");
+        let mut diff_jmap = serde_json::Map::new();
+        diff_jmap.insert("path".to_owned(), Value::String(path));
+        match &self.diff {
+            DiffChange::Add(val) => {
+                diff_jmap.insert("new_val".to_owned(), val.clone());
+                diff_jmap.insert("diff".to_owned(), Value::String("add".to_owned()));
+            }
+            DiffChange::Remove(val) => {
+                diff_jmap.insert("old_val".to_owned(), val.clone());
+                diff_jmap.insert("diff".to_owned(), Value::String("remove".to_owned()));
+            }
+            DiffChange::Replace { old_val, new_val } => {
+                diff_jmap.insert("old_val".to_owned(), old_val.clone());
+                diff_jmap.insert("new_val".to_owned(), new_val.clone());
+                diff_jmap.insert("diff".to_owned(), Value::String("replace".to_owned()));
+            }
+        };
+        let diff_j = Value::Object(diff_jmap);
+        let pretty_diff_str = serde_json::to_string_pretty(&diff_j).unwrap();
+        write!(f, "{}", pretty_diff_str)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
