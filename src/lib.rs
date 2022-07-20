@@ -8,14 +8,15 @@ use std::error::Error;
 use std::fmt::Display;
 use std::fs::File;
 use std::io::BufReader;
-use std::path;
+use std::ops::Deref;
+use std::ops::DerefMut;
 
 fn read_json_str(s: &str) -> Result<Value> {
     let v: Value = serde_json::from_str(s)?;
     Ok(v)
 }
 
-fn read_json_file<P: AsRef<path::Path>>(path: P) -> result::Result<Value, Box<dyn Error>> {
+fn read_json_file<P: AsRef<std::path::Path>>(path: P) -> result::Result<Value, Box<dyn Error>> {
     let f = File::open(path)?;
     let reader = BufReader::new(f);
     let v = serde_json::from_reader(reader)?;
@@ -43,7 +44,45 @@ impl Display for PathElem {
     }
 }
 
-type Path = Vec<PathElem>;
+//type Path = Vec<PathElem>;
+#[derive(Debug, PartialEq, Eq, Clone)]
+struct Path(Vec<PathElem>);
+
+impl Display for Path {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = String::from("/")
+            + &self
+                .iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<String>>()
+                .join("/");
+        write!(f, "{}", s)
+    }
+}
+
+impl Deref for Path {
+    type Target = Vec<PathElem>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Path {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Path {
+    fn empty() -> Self {
+        Self(vec![])
+    }
+
+    fn new(path: Vec<PathElem>) -> Self {
+        Self(path)
+    }
+}
 
 // TODO: use reference not own
 #[derive(Debug, PartialEq, Eq)]
@@ -54,13 +93,7 @@ pub struct DiffElem {
 
 impl Display for DiffElem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let path = "/".to_owned()
-            + &self
-                .path
-                .iter()
-                .map(|x| x.to_string())
-                .collect::<Vec<String>>()
-                .join("/");
+        let path = self.path.to_string();
         let mut diff_jmap = serde_json::Map::new();
         diff_jmap.insert("path".to_owned(), Value::String(path));
         match &self.diff {
@@ -133,7 +166,7 @@ pub fn diff_json_simple(json0: &str, json1: &str) -> Option<Vec<DiffElem>> {
 }
 
 fn diff_json_str(json0: &str, json1: &str, arr_diff: JsonArrDiff) -> Option<Vec<DiffElem>> {
-    let path = vec![];
+    let path = Path::empty();
     let diffs = Vec::new();
     let json0 = read_json_str(json0).ok()?;
     let json1 = read_json_str(json1).ok()?;
@@ -320,6 +353,7 @@ mod tests {
     use crate::read_json_str;
     use crate::DiffChange;
     use crate::DiffElem;
+    use crate::Path;
     use crate::PathElem;
     use crate::Value;
     use serde_json::Number;
@@ -357,7 +391,7 @@ mod tests {
                 old_val: Value::Bool(true),
                 new_val: Value::Bool(false),
             },
-            path: vec![PathElem::Key("x".to_string())],
+            path: Path::new(vec![PathElem::Key("x".to_string())]),
         };
 
         check_diff(s0, s1, vec![diff])
@@ -381,7 +415,7 @@ mod tests {
             json2,
             vec![DiffElem {
                 diff: DiffChange::Add(Value::Bool(false)),
-                path: vec![PathElem::Key("new".to_string())],
+                path: Path::new(vec![PathElem::Key("new".to_string())]),
             }],
         );
 
@@ -391,11 +425,11 @@ mod tests {
             vec![
                 DiffElem {
                     diff: DiffChange::Add(Value::Bool(false)),
-                    path: vec![PathElem::Key("new1".to_string())],
+                    path: Path::new(vec![PathElem::Key("new1".to_string())]),
                 },
                 DiffElem {
                     diff: DiffChange::Add(Value::Null),
-                    path: vec![PathElem::Key("new2".to_string())],
+                    path: Path::new(vec![PathElem::Key("new2".to_string())]),
                 },
             ],
         );
@@ -406,14 +440,14 @@ mod tests {
             vec![
                 DiffElem {
                     diff: DiffChange::Add(Value::String("new_val".to_string())),
-                    path: vec![
+                    path: Path::new(vec![
                         PathElem::Key("b".to_string()),
                         PathElem::Key("b".to_string()),
-                    ],
+                    ]),
                 },
                 DiffElem {
                     diff: DiffChange::Add(Value::Null),
-                    path: vec![PathElem::Key("c".to_string())],
+                    path: Path::new(vec![PathElem::Key("c".to_string())]),
                 },
             ],
         );
@@ -431,7 +465,7 @@ mod tests {
             json1,
             vec![DiffElem {
                 diff: DiffChange::Remove(Value::Bool(false)),
-                path: vec![PathElem::Key("old".to_string())],
+                path: Path::new(vec![PathElem::Key("old".to_string())]),
             }],
         );
 
@@ -441,11 +475,11 @@ mod tests {
             vec![
                 DiffElem {
                     diff: DiffChange::Remove(Value::Bool(false)),
-                    path: vec![PathElem::Key("old1".to_string())],
+                    path: Path::new(vec![PathElem::Key("old1".to_string())]),
                 },
                 DiffElem {
                     diff: DiffChange::Remove(Value::Null),
-                    path: vec![PathElem::Key("old2".to_string())],
+                    path: Path::new(vec![PathElem::Key("old2".to_string())]),
                 },
             ],
         );
@@ -456,14 +490,14 @@ mod tests {
             vec![
                 DiffElem {
                     diff: DiffChange::Remove(Value::String("old_val".to_string())),
-                    path: vec![
+                    path: Path::new(vec![
                         PathElem::Key("b".to_string()),
                         PathElem::Key("b".to_string()),
-                    ],
+                    ]),
                 },
                 DiffElem {
                     diff: DiffChange::Remove(Value::Null),
-                    path: vec![PathElem::Key("c".to_string())],
+                    path: Path::new(vec![PathElem::Key("c".to_string())]),
                 },
             ],
         );
@@ -479,22 +513,22 @@ mod tests {
             vec![
                 DiffElem {
                     diff: DiffChange::Add(Value::Number(Number::from(0))),
-                    path: vec![PathElem::Key("a".to_owned()), PathElem::Index(0)],
+                    path: Path::new(vec![PathElem::Key("a".to_owned()), PathElem::Index(0)]),
                 },
                 DiffElem {
                     diff: DiffChange::Remove(Value::Number(Number::from(2))),
-                    path: vec![PathElem::Key("a".to_owned()), PathElem::Index(2)],
+                    path: Path::new(vec![PathElem::Key("a".to_owned()), PathElem::Index(2)]),
                 },
                 DiffElem {
                     diff: DiffChange::Remove(Value::Number(Number::from(6))),
-                    path: vec![PathElem::Key("a".to_owned()), PathElem::Index(3)],
+                    path: Path::new(vec![PathElem::Key("a".to_owned()), PathElem::Index(3)]),
                 },
                 DiffElem {
                     diff: DiffChange::Replace {
                         old_val: Value::Number(Number::from(10)),
                         new_val: Value::Number(Number::from(13)),
                     },
-                    path: vec![PathElem::Key("a".to_owned()), PathElem::Index(6)],
+                    path: Path::new(vec![PathElem::Key("a".to_owned()), PathElem::Index(6)]),
                 },
             ],
         );

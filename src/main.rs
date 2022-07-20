@@ -1,4 +1,5 @@
 use json_diff_patch::diff_json;
+use std::collections::HashMap;
 
 fn main() {
     let data = r#"
@@ -24,5 +25,12 @@ fn main() {
             "c": ["2", "3", "a", "b", "c", "d", "e"]
         }"#;
     let diffs = diff_json(data, data1);
+    // TODO: check diffs is None
+    let diffs = diffs.unwrap();
+
+    // diff 2 map
+    // TODO: make own path struct
+    // let map = HashMap::new();
+
     println!("{:?}", diffs);
 }
