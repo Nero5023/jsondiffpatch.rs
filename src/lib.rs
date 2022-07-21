@@ -46,7 +46,7 @@ impl Display for PathElem {
 
 //type Path = Vec<PathElem>;
 #[derive(Debug, PartialEq, Eq, Clone)]
-struct Path(Vec<PathElem>);
+pub struct Path(Vec<PathElem>);
 
 impl Display for Path {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -75,7 +75,7 @@ impl DerefMut for Path {
 }
 
 impl Path {
-    fn empty() -> Self {
+    pub fn empty() -> Self {
         Self(vec![])
     }
 
@@ -114,6 +114,20 @@ impl Display for DiffElem {
         let diff_j = Value::Object(diff_jmap);
         let pretty_diff_str = serde_json::to_string_pretty(&diff_j).unwrap();
         write!(f, "{}", pretty_diff_str)
+    }
+}
+
+impl DiffElem {
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn path_str(&self) -> String {
+        self.path.to_string()
+    }
+
+    pub fn diff_change(&self) -> &DiffChange {
+        &self.diff
     }
 }
 
