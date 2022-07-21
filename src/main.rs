@@ -1,3 +1,4 @@
+use json_diff_patch::DiffElem;
 use json_diff_patch::diff_json;
 use json_diff_patch::DiffChange;
 use json_diff_patch::Path;
@@ -41,6 +42,7 @@ fn format_json_loop<F>(
     jval: &Value,
     curr_path: &Path,
     diff_map: &HashMap<String, &DiffChange>,
+    child_added_keys: &HashMap<String, Vec<String>>,
     indent_count: usize,
     output: &mut F,
 ) where
@@ -60,6 +62,25 @@ fn format_json_loop<F>(
     } else {
         " ".repeat(indent_count)
     };
+
+    // added keys 
+    if let Some(mut parent_path) = curr_path.parent_path() {
+        let parent_path_str = parent_path.to_string();
+        if let Some(add_keys) = child_added_keys.get(&parent_path_str) {
+            
+            for key in add_keys {
+                parent_path.push(PathElem::Key(key.to_owned()));
+                let val = diff_map.get(&parent_path.to_string()).unwrap();
+                assert!(matches!(val, DiffChange::Add(_)));
+                if let DiffChange::Add(new_val) = val {
+                    format_json_val(new_val, Some(key.to_string()), indent_count, Some("+"), output);
+                }
+                parent_path.pop();    
+            }
+        }
+    }
+
+    
 
     if let Some(diff_change) = diff_map.get(&curr_path.to_string()) {
         match *diff_change {
@@ -83,7 +104,8 @@ fn format_json_loop<F>(
                 for (key, val) in vmap {
                     let mut new_path = curr_path.clone();
                     new_path.push(json_diff_patch::PathElem::Key(key.to_string()));
-                    format_json_loop(val, &new_path, diff_map, indent_count+4, output);
+                    // TODO: use static value to + 4
+                    format_json_loop(val, &new_path, diff_map, child_added_keys, indent_count+4, output);
                 }
                 let right_brace = format!("{}{}{}", " ", " ".repeat(indent_count), "}");
                 output(&right_brace)
@@ -119,7 +141,7 @@ fn format_json_loop<F>(
                             }
                         }
                     } else {
-                        format_json_loop(&arr[real_idx], &new_path, diff_map, indent_count+4, output);
+                        format_json_loop(&arr[real_idx], &new_path, diff_map, child_added_keys, indent_count+4, output);
                         real_idx += 1;
                         cur_idx += 1;
                     }
@@ -144,9 +166,8 @@ fn format_json_loop<F>(
                         }
                     }
                 }
-                //TODO: add ] print
                 let right_bracket = format!("{}{}", " ".repeat(indent_count), "]");
-                output(&right_bracket) 
+                output(&right_bracket);
             }
         }
     }
@@ -187,10 +208,20 @@ fn main() {
     // diff 2 map
     // TODO: make own path struct
     let mut map = HashMap::new();
+    let mut path2added_keys = HashMap::new();
 
     for diff in diffs.iter() {
         let path_str = diff.path_str();
         map.insert(path_str, diff.diff_change());
+        if let DiffChange::Add(_) = diff.diff_change() {
+            let last_key = diff.path().last().unwrap();
+            if let PathElem::Key(str_key) = last_key {
+                let parent_path = diff.path().parent_path().map(|p| p.to_string()).unwrap_or(String::from(""));
+                let keys = path2added_keys.entry(parent_path).or_insert(vec![]);
+                keys.push(str_key.to_owned());
+            }
+            
+        }
     }
 
     let mut output_mut = |line: &str| {
@@ -199,7 +230,7 @@ fn main() {
 
     let v: Value = serde_json::from_str(data).unwrap();
 
-    format_json_loop(&v, &Path::empty(), &map, 1, &mut output_mut);
+    format_json_loop(&v, &Path::empty(), &map, &path2added_keys, 1, &mut output_mut);
 
     println!("{:?}", diffs);
 }

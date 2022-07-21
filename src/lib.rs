@@ -82,6 +82,16 @@ impl Path {
     fn new(path: Vec<PathElem>) -> Self {
         Self(path)
     }
+
+    pub fn parent_path(&self) -> Option<Self> {
+        if self.len() == 0 {
+            None
+        } else {
+            let mut path = self.clone();
+            path.pop();
+            Some(path)
+        }
+    }
 }
 
 // TODO: use reference not own
