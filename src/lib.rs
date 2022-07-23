@@ -295,13 +295,7 @@ fn diff_json_arr_lcs(
             // replace
             let mut new_path = path.clone();
             new_path.push(PathElem::Index(shift_idx));
-            diffs.push(DiffElem {
-                diff: DiffChange::Replace {
-                    old_val: arr0[idx0].clone(),
-                    new_val: arr1[idx1].clone(),
-                },
-                path: new_path,
-            });
+            diffs = diff_json_inner(&arr0[idx0], &arr1[idx1], diffs, new_path, &JsonArrDiff::Lcs);
             shift_idx += 1;
             idx0 += 1;
             idx1 += 1;
@@ -333,13 +327,7 @@ fn diff_json_arr_lcs(
         // replace
         let mut new_path = path.clone();
         new_path.push(PathElem::Index(shift_idx));
-        diffs.push(DiffElem {
-            diff: DiffChange::Replace {
-                old_val: arr0[idx0].clone(),
-                new_val: arr1[idx1].clone(),
-            },
-            path: new_path,
-        });
+        diffs = diff_json_inner(&arr0[idx0], &arr1[idx1], diffs, new_path, &JsonArrDiff::Lcs);
         shift_idx += 1;
         idx0 += 1;
         idx1 += 1;
@@ -556,5 +544,90 @@ mod tests {
                 },
             ],
         );
+    }
+
+    #[test]
+    fn test_obj_nested_in_arr() {
+        let json1 = r#"
+        {
+            "key": [
+                13,
+                {
+                    "a": "b",
+                    "c": "d"
+                },
+                10
+            ]
+        }
+        "#;
+        let json2 = r#"
+        {
+            "key": [
+                13,
+                {
+                    "a": "b",
+                    "c": "z",
+                    "e": "f"
+                },
+                10
+            ]
+        }
+        "#;
+        check_diff(
+            json1,
+            json2,
+            vec![
+                DiffElem {
+                    diff: DiffChange::Add(Value::String("f".to_owned())),
+                    path: Path::new(vec![PathElem::Key("key".to_owned()), PathElem::Index(1), PathElem::Key("e".to_owned())]),
+                },
+                DiffElem {
+                    diff: DiffChange::Replace {
+                        old_val: Value::String("d".to_owned()),
+                        new_val: Value::String("z".to_owned()),
+                    },
+                    path: Path::new(vec![PathElem::Key("key".to_owned()), PathElem::Index(1), PathElem::Key("c".to_owned())]),
+                },
+            ]);
+        
+        let json3 = r#"
+        {
+            "key": [
+                13,
+                {
+                    "a": "b",
+                    "c": "d"
+                }
+            ]
+        }
+        "#;
+        let json4 = r#"
+        {
+            "key": [
+                13,
+                {
+                    "a": "b",
+                    "c": "z",
+                    "e": "f"
+                }
+            ]
+        }
+        "#;
+        check_diff(
+            json3,
+            json4,
+            vec![
+                DiffElem {
+                    diff: DiffChange::Add(Value::String("f".to_owned())),
+                    path: Path::new(vec![PathElem::Key("key".to_owned()), PathElem::Index(1), PathElem::Key("e".to_owned())]),
+                },
+                DiffElem {
+                    diff: DiffChange::Replace {
+                        old_val: Value::String("d".to_owned()),
+                        new_val: Value::String("z".to_owned()),
+                    },
+                    path: Path::new(vec![PathElem::Key("key".to_owned()), PathElem::Index(1), PathElem::Key("c".to_owned())]),
+                },
+            ]);
     }
 }
