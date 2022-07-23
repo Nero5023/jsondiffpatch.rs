@@ -10,6 +10,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::ops::Deref;
 use std::ops::DerefMut;
+use std::string::ToString;
 
 fn read_json_str(s: &str) -> Result<Value> {
     let v: Value = serde_json::from_str(s)?;
@@ -92,9 +93,28 @@ impl Path {
             Some(path)
         }
     }
+
+    pub fn clone_then_add_key<T: ToString>(&self, s: T) -> Self {
+        let mut new_path = self.clone();
+        new_path.push(PathElem::Key(s.to_string()));
+        new_path
+    }
+
+    pub fn clone_then_add_idx(&self, idx: usize) -> Self {
+        let mut new_path = self.clone();
+        new_path.push(PathElem::Index(idx));
+        new_path
+    }
+
+    pub fn push_idx(&mut self, idx: usize) {
+        self.push(PathElem::Index(idx))
+    }
+
+    pub fn push_key<T: ToString>(&mut self, s: T) {
+        self.push(PathElem::Key(s.to_string()))
+    }
 }
 
-// TODO: use reference not own
 #[derive(Debug, PartialEq, Eq)]
 pub struct DiffElem {
     diff: DiffChange,
@@ -148,12 +168,12 @@ pub enum DiffChange {
     Remove(Value),
 }
 
-enum JsonArrDiff {
+enum ArrDiffMethod {
     Simple,
     Lcs,
 }
 
-impl JsonArrDiff {
+impl ArrDiffMethod {
     fn diff(
         &self,
         arr0: &[Value],
@@ -162,7 +182,7 @@ impl JsonArrDiff {
         path: Path,
     ) -> Vec<DiffElem> {
         match *self {
-            JsonArrDiff::Simple => {
+            ArrDiffMethod::Simple => {
                 if arr0 == arr1 {
                     diffs
                 } else {
@@ -176,20 +196,20 @@ impl JsonArrDiff {
                     diffs
                 }
             }
-            JsonArrDiff::Lcs => diff_json_arr_lcs(arr0, arr1, diffs, path),
+            ArrDiffMethod::Lcs => diff_json_arr_lcs(arr0, arr1, diffs, path),
         }
     }
 }
 
 pub fn diff_json(json0: &str, json1: &str) -> Option<Vec<DiffElem>> {
-    diff_json_str(json0, json1, JsonArrDiff::Lcs)
+    diff_json_str(json0, json1, ArrDiffMethod::Lcs)
 }
 
 pub fn diff_json_simple(json0: &str, json1: &str) -> Option<Vec<DiffElem>> {
-    diff_json_str(json0, json1, JsonArrDiff::Simple)
+    diff_json_str(json0, json1, ArrDiffMethod::Simple)
 }
 
-fn diff_json_str(json0: &str, json1: &str, arr_diff: JsonArrDiff) -> Option<Vec<DiffElem>> {
+fn diff_json_str(json0: &str, json1: &str, arr_diff: ArrDiffMethod) -> Option<Vec<DiffElem>> {
     let path = Path::empty();
     let diffs = Vec::new();
     let json0 = read_json_str(json0).ok()?;
@@ -203,7 +223,7 @@ fn diff_json_inner(
     jval1: &Value,
     mut diffs: Vec<DiffElem>,
     path: Path,
-    arr_diff: &JsonArrDiff,
+    arr_diff: &ArrDiffMethod,
 ) -> Vec<DiffElem> {
     match (jval0, jval1) {
         (Value::Null, Value::Null) => diffs,
@@ -233,12 +253,11 @@ fn diff_json_map(
     m1: &Map<String, Value>,
     mut diffs: Vec<DiffElem>,
     path: Path,
-    arr_diff: &JsonArrDiff,
+    arr_diff: &ArrDiffMethod,
 ) -> Vec<DiffElem> {
     for (k, v0) in m0.iter() {
         if let Some(v1) = m1.get(k) {
-            let mut new_path = path.clone();
-            new_path.push(PathElem::Key(k.to_string()));
+            let new_path = path.clone_then_add_key(k);
             diffs = diff_json_inner(v0, v1, diffs, new_path, arr_diff);
         }
     }
@@ -248,8 +267,7 @@ fn diff_json_map(
     let keys_only_in_m1 = keys1.difference(&keys0);
 
     for k in keys_only_in_m0 {
-        let mut new_path = path.clone();
-        new_path.push(PathElem::Key(k.to_string()));
+        let new_path = path.clone_then_add_key(k);
         diffs.push(DiffElem {
             diff: DiffChange::Remove(m0.get(k).unwrap().clone()),
             path: new_path,
@@ -257,8 +275,7 @@ fn diff_json_map(
     }
 
     for k in keys_only_in_m1 {
-        let mut new_path = path.clone();
-        new_path.push(PathElem::Key(k.to_string()));
+        let new_path = path.clone_then_add_key(k);
         diffs.push(DiffElem {
             diff: DiffChange::Add(m1.get(k).unwrap().clone()),
             path: new_path,
@@ -293,16 +310,20 @@ fn diff_json_arr_lcs(
             idx1 += 1;
         } else if idx0 < same_idx_pair.0 && idx1 < same_idx_pair.1 {
             // replace
-            let mut new_path = path.clone();
-            new_path.push(PathElem::Index(shift_idx));
-            diffs = diff_json_inner(&arr0[idx0], &arr1[idx1], diffs, new_path, &JsonArrDiff::Lcs);
+            let new_path = path.clone_then_add_idx(shift_idx);
+            diffs = diff_json_inner(
+                &arr0[idx0],
+                &arr1[idx1],
+                diffs,
+                new_path,
+                &ArrDiffMethod::Lcs,
+            );
             shift_idx += 1;
             idx0 += 1;
             idx1 += 1;
         } else if idx0 < same_idx_pair.0 && idx1 == same_idx_pair.1 {
             // remove val in arr0
-            let mut new_path = path.clone();
-            new_path.push(PathElem::Index(shift_idx));
+            let new_path = path.clone_then_add_idx(shift_idx);
             diffs.push(DiffElem {
                 diff: DiffChange::Remove(arr0[idx0].clone()),
                 path: new_path,
@@ -310,8 +331,7 @@ fn diff_json_arr_lcs(
             idx0 += 1;
         } else if idx0 == same_idx_pair.0 && idx1 < same_idx_pair.1 {
             // add val in arr1
-            let mut new_path = path.clone();
-            new_path.push(PathElem::Index(shift_idx));
+            let new_path = path.clone_then_add_idx(shift_idx);
             diffs.push(DiffElem {
                 diff: DiffChange::Add(arr1[idx1].clone()),
                 path: new_path,
@@ -325,9 +345,14 @@ fn diff_json_arr_lcs(
     let len1 = arr1.len();
     while idx0 < len0 && idx1 < len1 {
         // replace
-        let mut new_path = path.clone();
-        new_path.push(PathElem::Index(shift_idx));
-        diffs = diff_json_inner(&arr0[idx0], &arr1[idx1], diffs, new_path, &JsonArrDiff::Lcs);
+        let new_path = path.clone_then_add_idx(shift_idx);
+        diffs = diff_json_inner(
+            &arr0[idx0],
+            &arr1[idx1],
+            diffs,
+            new_path,
+            &ArrDiffMethod::Lcs,
+        );
         shift_idx += 1;
         idx0 += 1;
         idx1 += 1;
@@ -335,8 +360,7 @@ fn diff_json_arr_lcs(
 
     while idx0 < len0 {
         // remove val in arr0
-        let mut new_path = path.clone();
-        new_path.push(PathElem::Index(shift_idx));
+        let new_path = path.clone_then_add_idx(shift_idx);
         diffs.push(DiffElem {
             diff: DiffChange::Remove(arr0[idx0].clone()),
             path: new_path,
@@ -346,8 +370,7 @@ fn diff_json_arr_lcs(
 
     while idx1 < len1 {
         // add val in arr1
-        let mut new_path = path.clone();
-        new_path.push(PathElem::Index(shift_idx));
+        let new_path = path.clone_then_add_idx(shift_idx);
         diffs.push(DiffElem {
             diff: DiffChange::Add(arr1[idx1].clone()),
             path: new_path,
@@ -579,17 +602,26 @@ mod tests {
             vec![
                 DiffElem {
                     diff: DiffChange::Add(Value::String("f".to_owned())),
-                    path: Path::new(vec![PathElem::Key("key".to_owned()), PathElem::Index(1), PathElem::Key("e".to_owned())]),
+                    path: Path::new(vec![
+                        PathElem::Key("key".to_owned()),
+                        PathElem::Index(1),
+                        PathElem::Key("e".to_owned()),
+                    ]),
                 },
                 DiffElem {
                     diff: DiffChange::Replace {
                         old_val: Value::String("d".to_owned()),
                         new_val: Value::String("z".to_owned()),
                     },
-                    path: Path::new(vec![PathElem::Key("key".to_owned()), PathElem::Index(1), PathElem::Key("c".to_owned())]),
+                    path: Path::new(vec![
+                        PathElem::Key("key".to_owned()),
+                        PathElem::Index(1),
+                        PathElem::Key("c".to_owned()),
+                    ]),
                 },
-            ]);
-        
+            ],
+        );
+
         let json3 = r#"
         {
             "key": [
@@ -619,15 +651,24 @@ mod tests {
             vec![
                 DiffElem {
                     diff: DiffChange::Add(Value::String("f".to_owned())),
-                    path: Path::new(vec![PathElem::Key("key".to_owned()), PathElem::Index(1), PathElem::Key("e".to_owned())]),
+                    path: Path::new(vec![
+                        PathElem::Key("key".to_owned()),
+                        PathElem::Index(1),
+                        PathElem::Key("e".to_owned()),
+                    ]),
                 },
                 DiffElem {
                     diff: DiffChange::Replace {
                         old_val: Value::String("d".to_owned()),
                         new_val: Value::String("z".to_owned()),
                     },
-                    path: Path::new(vec![PathElem::Key("key".to_owned()), PathElem::Index(1), PathElem::Key("c".to_owned())]),
+                    path: Path::new(vec![
+                        PathElem::Key("key".to_owned()),
+                        PathElem::Index(1),
+                        PathElem::Key("c".to_owned()),
+                    ]),
                 },
-            ]);
+            ],
+        );
     }
 }
