@@ -3,6 +3,7 @@ mod lcs;
 use core::result;
 use serde_json::map::Map;
 use serde_json::{Result, Value};
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt::Display;
@@ -24,7 +25,7 @@ fn read_json_file<P: AsRef<std::path::Path>>(path: P) -> result::Result<Value, B
     Ok(v)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
 pub enum PathElem {
     Key(String),
     Index(usize),
@@ -46,7 +47,7 @@ impl Display for PathElem {
 }
 
 //type Path = Vec<PathElem>;
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Path(Vec<PathElem>);
 
 impl Display for Path {
@@ -115,7 +116,7 @@ impl Path {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct DiffElem {
     diff: DiffChange,
     path: Path,
@@ -161,11 +162,52 @@ impl DiffElem {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum DiffChange {
     Replace { old_val: Value, new_val: Value },
     Add(Value),
     Remove(Value),
+}
+
+pub struct JsonDiff {
+    path2change: HashMap<Path, DiffChange>,
+    child_added_keys: HashMap<Path, Vec<String>>,
+}
+
+impl JsonDiff {
+    fn new(diffs: Vec<DiffElem>) -> Self {
+        let mut path2change = HashMap::new();
+        let mut child_added_keys = HashMap::new();
+        for diff in diffs {
+            path2change.insert(diff.path().clone(), diff.diff_change().clone());
+            if let DiffChange::Add(_) = diff.diff_change() {
+                let last_key = diff.path().last().unwrap();
+                // just for PathElem::Key
+                if let PathElem::Key(str_key) = last_key {
+                    let parent_path = diff.path().parent_path().unwrap();
+                    let keys = child_added_keys.entry(parent_path).or_insert_with(Vec::new);
+                    keys.push(str_key.to_owned());
+                }
+            }
+        }
+        Self {
+            path2change,
+            child_added_keys,
+        }
+    }
+
+    pub fn diff_json(s0: &str, s1: &str) -> Result<Self> {
+        let diffs = diff_json(s0, s1)?;
+        Ok(Self::new(diffs))
+    }
+
+    pub fn get_add_keys(&self, path: &Path) -> Option<&Vec<String>> {
+        self.child_added_keys.get(path)
+    }
+
+    pub fn get_diffchange(&self, path: &Path) -> Option<&DiffChange> {
+        self.path2change.get(path)
+    }
 }
 
 enum ArrDiffMethod {
@@ -201,21 +243,21 @@ impl ArrDiffMethod {
     }
 }
 
-pub fn diff_json(json0: &str, json1: &str) -> Option<Vec<DiffElem>> {
+pub fn diff_json(json0: &str, json1: &str) -> Result<Vec<DiffElem>> {
     diff_json_str(json0, json1, ArrDiffMethod::Lcs)
 }
 
-pub fn diff_json_simple(json0: &str, json1: &str) -> Option<Vec<DiffElem>> {
+pub fn diff_json_simple(json0: &str, json1: &str) -> Result<Vec<DiffElem>> {
     diff_json_str(json0, json1, ArrDiffMethod::Simple)
 }
 
-fn diff_json_str(json0: &str, json1: &str, arr_diff: ArrDiffMethod) -> Option<Vec<DiffElem>> {
+fn diff_json_str(json0: &str, json1: &str, arr_diff: ArrDiffMethod) -> Result<Vec<DiffElem>> {
     let path = Path::empty();
     let diffs = Vec::new();
-    let json0 = read_json_str(json0).ok()?;
-    let json1 = read_json_str(json1).ok()?;
+    let json0 = read_json_str(json0)?;
+    let json1 = read_json_str(json1)?;
     let diffs = diff_json_inner(&json0, &json1, diffs, path, &arr_diff);
-    Some(diffs)
+    Ok(diffs)
 }
 
 fn diff_json_inner(
