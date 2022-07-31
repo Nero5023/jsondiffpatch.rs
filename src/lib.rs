@@ -243,11 +243,11 @@ impl ArrDiffMethod {
     }
 }
 
-pub fn diff_json(json0: &str, json1: &str) -> Result<Vec<DiffElem>> {
+fn diff_json(json0: &str, json1: &str) -> Result<Vec<DiffElem>> {
     diff_json_str(json0, json1, ArrDiffMethod::Lcs)
 }
 
-pub fn diff_json_simple(json0: &str, json1: &str) -> Result<Vec<DiffElem>> {
+fn diff_json_simple(json0: &str, json1: &str) -> Result<Vec<DiffElem>> {
     diff_json_str(json0, json1, ArrDiffMethod::Simple)
 }
 
