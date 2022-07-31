@@ -1,3 +1,4 @@
+use console::Style;
 use json_diff_patch::DiffChange;
 use json_diff_patch::JsonDiff;
 use json_diff_patch::Path;
@@ -14,7 +15,7 @@ fn format_json_val<F>(
     diff_op: Option<&str>,
     output: &mut F,
 ) where
-    F: FnMut(&str),
+    F: FnMut(&str, &str),
 {
     let diff_op_s = diff_op.unwrap_or(" ");
     let prefix = if let Some(key) = key {
@@ -24,20 +25,20 @@ fn format_json_val<F>(
     };
     match jval {
         Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {
-            output(&format!("{}{}", prefix, jval))
+            output(diff_op_s, &format!("{}{}", prefix, jval))
         }
         Value::Array(arr) => {
             let left_bracket = format!("{}{}", prefix, "[");
-            output(&left_bracket);
+            output(diff_op_s, &left_bracket);
             arr.iter().for_each(|v| {
                 format_json_val(v, None, indent_count + INDENT_SIZE, diff_op, output)
             });
             let right_bracket = format!("{}{}", " ".repeat(indent_count), "]");
-            output(&right_bracket)
+            output(diff_op_s, &right_bracket)
         }
         Value::Object(vmap) => {
             let left_brace = format!("{}{}", prefix, "{");
-            output(&left_brace);
+            output(diff_op_s, &left_brace);
             for (key, val) in vmap {
                 format_json_val(
                     val,
@@ -48,7 +49,7 @@ fn format_json_val<F>(
                 );
             }
             let right_brace = format!("{}{}{}", diff_op_s, " ".repeat(indent_count), "}");
-            output(&right_brace);
+            output(diff_op_s, &right_brace);
         }
     };
 }
@@ -60,7 +61,7 @@ fn format_json_loop<F>(
     indent_count: usize,
     output: &mut F,
 ) where
-    F: FnMut(&str),
+    F: FnMut(&str, &str),
 {
     let key = if let Some(last_key) = curr_path.last() {
         match last_key {
@@ -115,7 +116,7 @@ fn format_json_loop<F>(
             }
             Value::Object(vmap) => {
                 let left_brace = format!("{}{}{}", " ", indent_key, "{");
-                output(&left_brace);
+                output(" ", &left_brace);
                 for (key, val) in vmap {
                     let new_path = curr_path.clone_then_add_key(key);
                     format_json_loop(
@@ -127,11 +128,11 @@ fn format_json_loop<F>(
                     );
                 }
                 let right_brace = format!("{}{}{}", " ", " ".repeat(indent_count), "}");
-                output(&right_brace)
+                output(" ", &right_brace)
             }
             Value::Array(arr) => {
                 let left_bracket = format!("{}{}{}", " ", indent_key, "[");
-                output(&left_bracket);
+                output(" ", &left_bracket);
 
                 let mut cur_idx: usize = 0;
                 let mut real_idx: usize = 0;
@@ -223,7 +224,7 @@ fn format_json_loop<F>(
                     }
                 }
                 let right_bracket = format!("{}{}", " ".repeat(indent_count), "]");
-                output(&right_bracket);
+                output(" ", &right_bracket);
             }
         }
     }
@@ -260,8 +261,13 @@ fn main() {
     // TODO: check diffs is None
     let json_diffs = JsonDiff::diff_json(data, data1).unwrap();
 
-    let mut output_mut = |line: &str| {
-        println!("{}", line);
+    let mut output_mut = |diff_opp: &str, line: &str| {
+        let str_output = match diff_opp {
+            "+" => format!("{}", Style::new().green().apply_to(line)),
+            "-" => format!("{}", Style::new().red().apply_to(line)),
+            _ => line.to_owned(),
+        };
+        println!("{}", str_output);
     };
 
     let v: Value = serde_json::from_str(data).unwrap();
