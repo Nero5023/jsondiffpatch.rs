@@ -5,6 +5,8 @@ use json_diff_patch::PathElem;
 use serde_json::Value;
 use std::unreachable;
 
+const INDENT_SIZE: usize = 4;
+
 fn format_json_val<F>(
     jval: &Value,
     key: Option<String>,
@@ -27,8 +29,9 @@ fn format_json_val<F>(
         Value::Array(arr) => {
             let left_bracket = format!("{}{}", prefix, "[");
             output(&left_bracket);
-            arr.iter()
-                .for_each(|v| format_json_val(v, None, indent_count + 4, diff_op, output));
+            arr.iter().for_each(|v| {
+                format_json_val(v, None, indent_count + INDENT_SIZE, diff_op, output)
+            });
             let right_bracket = format!("{}{}", " ".repeat(indent_count), "]");
             output(&right_bracket)
         }
@@ -36,7 +39,13 @@ fn format_json_val<F>(
             let left_brace = format!("{}{}", prefix, "{");
             output(&left_brace);
             for (key, val) in vmap {
-                format_json_val(val, Some(key.to_owned()), indent_count + 4, diff_op, output);
+                format_json_val(
+                    val,
+                    Some(key.to_owned()),
+                    indent_count + INDENT_SIZE,
+                    diff_op,
+                    output,
+                );
             }
             let right_brace = format!("{}{}{}", diff_op_s, " ".repeat(indent_count), "}");
             output(&right_brace);
@@ -109,8 +118,13 @@ fn format_json_loop<F>(
                 output(&left_brace);
                 for (key, val) in vmap {
                     let new_path = curr_path.clone_then_add_key(key);
-                    // TODO: use static value to + 4
-                    format_json_loop(val, &new_path, json_diffs, indent_count + 4, output);
+                    format_json_loop(
+                        val,
+                        &new_path,
+                        json_diffs,
+                        indent_count + INDENT_SIZE,
+                        output,
+                    );
                 }
                 let right_brace = format!("{}{}{}", " ", " ".repeat(indent_count), "}");
                 output(&right_brace)
@@ -127,19 +141,43 @@ fn format_json_loop<F>(
                     if let Some(diff_change) = json_diffs.get_diffchange(&new_path) {
                         match diff_change {
                             DiffChange::Add(val) => {
-                                format_json_val(val, None, indent_count + 4, Some("+"), output);
+                                format_json_val(
+                                    val,
+                                    None,
+                                    indent_count + INDENT_SIZE,
+                                    Some("+"),
+                                    output,
+                                );
                                 cur_idx += 1;
                                 curr_len += 1;
                             }
                             DiffChange::Remove(val) => {
-                                format_json_val(val, None, indent_count + 4, Some("-"), output);
+                                format_json_val(
+                                    val,
+                                    None,
+                                    indent_count + INDENT_SIZE,
+                                    Some("-"),
+                                    output,
+                                );
                                 assert_eq!(val, &arr[real_idx]);
                                 curr_len -= 1;
                                 real_idx += 1;
                             }
                             DiffChange::Replace { old_val, new_val } => {
-                                format_json_val(old_val, None, indent_count + 4, Some("-"), output);
-                                format_json_val(new_val, None, indent_count + 4, Some("+"), output);
+                                format_json_val(
+                                    old_val,
+                                    None,
+                                    indent_count + INDENT_SIZE,
+                                    Some("-"),
+                                    output,
+                                );
+                                format_json_val(
+                                    new_val,
+                                    None,
+                                    indent_count + INDENT_SIZE,
+                                    Some("+"),
+                                    output,
+                                );
                                 cur_idx += 1;
                                 real_idx += 1;
                             }
@@ -149,7 +187,7 @@ fn format_json_loop<F>(
                             &arr[real_idx],
                             &new_path,
                             json_diffs,
-                            indent_count + 4,
+                            indent_count + INDENT_SIZE,
                             output,
                         );
                         real_idx += 1;
@@ -160,7 +198,13 @@ fn format_json_loop<F>(
                 while let Some(diff_change) = json_diffs.get_diffchange(&new_path) {
                     match diff_change {
                         DiffChange::Add(val) => {
-                            format_json_val(val, None, indent_count + 4, Some("+"), output);
+                            format_json_val(
+                                val,
+                                None,
+                                indent_count + INDENT_SIZE,
+                                Some("+"),
+                                output,
+                            );
                             cur_idx += 1;
                             new_path.pop();
                             new_path.push_idx(cur_idx);
