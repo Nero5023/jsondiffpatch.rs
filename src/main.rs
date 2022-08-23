@@ -78,28 +78,6 @@ fn format_json_loop<F>(
         " ".repeat(indent_count)
     };
 
-    // added keys
-    if let Some(mut parent_path) = curr_path.parent_path() {
-        //let parent_path_str = parent_path.to_string();
-        if let Some(add_keys) = json_diffs.get_add_keys(&parent_path) {
-            for key in add_keys {
-                parent_path.push_key(key);
-                let val = json_diffs.get_diffchange(&parent_path).unwrap();
-                assert!(matches!(val, DiffChange::Add(_)));
-                if let DiffChange::Add(new_val) = val {
-                    format_json_val(
-                        new_val,
-                        Some(key.to_string()),
-                        indent_count,
-                        Some("+"),
-                        output,
-                    );
-                }
-                parent_path.pop();
-            }
-        }
-    }
-
     if let Some(diff_change) = json_diffs.get_diffchange(curr_path) {
         match diff_change {
             DiffChange::Remove(val) => format_json_val(val, key, indent_count, Some("-"), output),
@@ -117,6 +95,29 @@ fn format_json_loop<F>(
             Value::Object(vmap) => {
                 let left_brace = format!("{}{}{}", " ", indent_key, "{");
                 output(" ", &left_brace);
+
+                {
+                    // added keys
+                    let mut path = curr_path.clone();
+                    if let Some(add_keys) = json_diffs.get_add_keys(&path) {
+                        for key in add_keys {
+                            path.push_key(key);
+                            let val = json_diffs.get_diffchange(&path).unwrap();
+                            assert!(matches!(val, DiffChange::Add(_)));
+                            if let DiffChange::Add(new_val) = val {
+                                format_json_val(
+                                    new_val,
+                                    Some(key.to_string()),
+                                    indent_count+INDENT_SIZE,
+                                    Some("+"),
+                                    output,
+                                );
+                            }
+                            path.pop();
+                        }
+                    }
+                }
+
                 for (key, val) in vmap {
                     let new_path = curr_path.clone_then_add_key(key);
                     format_json_loop(
