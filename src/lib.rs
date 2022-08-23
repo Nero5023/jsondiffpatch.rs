@@ -169,6 +169,7 @@ pub enum DiffChange {
     Remove(Value),
 }
 
+#[derive(Debug)]
 pub struct JsonDiff {
     path2change: HashMap<Path, DiffChange>,
     child_added_keys: HashMap<Path, Vec<String>>,

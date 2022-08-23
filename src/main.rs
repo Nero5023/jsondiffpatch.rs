@@ -1,9 +1,12 @@
+use clap::Parser;
 use console::Style;
 use json_diff_patch::DiffChange;
 use json_diff_patch::JsonDiff;
 use json_diff_patch::Path;
 use json_diff_patch::PathElem;
 use serde_json::Value;
+use std::fs;
+use std::process;
 use std::unreachable;
 
 const INDENT_SIZE: usize = 4;
@@ -231,36 +234,32 @@ fn format_json_loop<F>(
     }
 }
 
+fn read_file(path: &str) -> String {
+    let res = fs::read_to_string(path);
+    match res {
+        Ok(content) => content,
+        Err(err) => {
+            println!("{}: {}", path, err);
+            process::exit(1);
+        }
+    }
+}
+
+#[derive(Parser)]
+struct Cli {
+    /// Old file
+    first_json: String,
+    /// New file
+    second_json: String,
+}
+
 fn main() {
-    let data = r#"
-        {
-            "name": "John Doe",
-            "age": 43,
-            "phones": [
-                "+44 1234567",
-                "+44 2345678",
-                "xxx"
-            ],
-            "c": {
-                "a": 1,
-                "b": 2
-            }
-        }"#;
-    let data1 = r#"
-        {
-            "name": "John Doe bill",
-            "age": 43,
-            "phones": [
-                "a",
-                "+44 1234567",
-                "+44 2345678",
-                "yy",
-                "zz"
-            ],
-            "key0": "name1"
-        }"#;
+    let args = Cli::parse();
+    let json1 = read_file(&args.first_json);
+    let json2 = read_file(&args.second_json);
+
     // TODO: check diffs is None
-    let json_diffs = JsonDiff::diff_json(data, data1).unwrap();
+    let json_diffs = JsonDiff::diff_json(&json1, &json2).unwrap();
 
     let mut output_mut = |diff_opp: &str, line: &str| {
         let str_output = match diff_opp {
@@ -271,7 +270,7 @@ fn main() {
         println!("{}", str_output);
     };
 
-    let v: Value = serde_json::from_str(data).unwrap();
+    let v: Value = serde_json::from_str(&json1).unwrap();
 
     format_json_loop(&v, &Path::empty(), &json_diffs, 1, &mut output_mut);
 }
