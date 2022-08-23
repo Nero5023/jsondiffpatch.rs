@@ -4,7 +4,7 @@ use json_diff_patch::DiffChange;
 use json_diff_patch::JsonDiff;
 use json_diff_patch::Path;
 use json_diff_patch::PathElem;
-use serde_json::Value;
+use serde_json::{Result, Value};
 use std::fs;
 use std::process;
 use std::unreachable;
@@ -234,10 +234,17 @@ fn format_json_loop<F>(
     }
 }
 
-fn read_file(path: &str) -> String {
+fn read_json_file(path: &str) -> String {
     let res = fs::read_to_string(path);
     match res {
-        Ok(content) => content,
+        Ok(content) => {
+            let json: Result<Value> = serde_json::from_str(&content);
+            if let Err(err) = json {
+                println!("Json `{}` parse error: {}", path, err);
+                process::exit(1); 
+            }
+            content
+        },
         Err(err) => {
             println!("{}: {}", path, err);
             process::exit(1);
@@ -253,13 +260,12 @@ struct Cli {
     second_json: String,
 }
 
-fn main() {
+fn main() -> Result<()> {
     let args = Cli::parse();
-    let json1 = read_file(&args.first_json);
-    let json2 = read_file(&args.second_json);
+    let json1 = read_json_file(&args.first_json);
+    let json2 = read_json_file(&args.second_json);
 
-    // TODO: check diffs is None
-    let json_diffs = JsonDiff::diff_json(&json1, &json2).unwrap();
+    let json_diffs = JsonDiff::diff_json(&json1, &json2)?;
 
     let mut output_mut = |diff_opp: &str, line: &str| {
         let str_output = match diff_opp {
@@ -270,7 +276,8 @@ fn main() {
         println!("{}", str_output);
     };
 
-    let v: Value = serde_json::from_str(&json1).unwrap();
+    let v: Value = serde_json::from_str(&json1)?;
 
     format_json_loop(&v, &Path::empty(), &json_diffs, 1, &mut output_mut);
+    Ok(())
 }
