@@ -114,6 +114,19 @@ impl Path {
     pub fn push_key<T: ToString>(&mut self, s: T) {
         self.push(PathElem::Key(s.to_string()))
     }
+
+    /// Return the json key that the path locate.
+    /// If is at json arr return None.
+    pub fn current_key(&self) -> Option<String> {
+        if let Some(last_key) = self.last() {
+            match last_key {
+                PathElem::Key(key) => Some(key.to_owned()),
+                PathElem::Index(_) => None,
+            }
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

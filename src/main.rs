@@ -66,18 +66,13 @@ fn format_json_loop<F>(
 ) where
     F: FnMut(&str, &str),
 {
-    let key = if let Some(last_key) = curr_path.last() {
-        match last_key {
-            PathElem::Key(key) => Some(key.to_owned()),
-            PathElem::Index(_) => None,
-        }
-    } else {
-        None
-    };
-
+    let key = curr_path.current_key();
     let indent_key = if let Some(s) = &key {
+        // e.g. for path /a/b/c
+        // ______c:
         format!(r#"{}{}: "#, " ".repeat(indent_count), s)
     } else {
+        // for arr index path or empty path, just indent space
         " ".repeat(indent_count)
     };
 
@@ -111,7 +106,7 @@ fn format_json_loop<F>(
                                 format_json_val(
                                     new_val,
                                     Some(key.to_string()),
-                                    indent_count+INDENT_SIZE,
+                                    indent_count + INDENT_SIZE,
                                     Some("+"),
                                     output,
                                 );
@@ -241,10 +236,10 @@ fn read_json_file(path: &str) -> String {
             let json: Result<Value> = serde_json::from_str(&content);
             if let Err(err) = json {
                 println!("Json `{}` parse error: {}", path, err);
-                process::exit(1); 
+                process::exit(1);
             }
             content
-        },
+        }
         Err(err) => {
             println!("{}: {}", path, err);
             process::exit(1);
