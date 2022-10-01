@@ -81,7 +81,7 @@ impl Path {
         Self(vec![])
     }
 
-    fn new(path: Vec<PathElem>) -> Self {
+    pub fn new(path: Vec<PathElem>) -> Self {
         Self(path)
     }
 
