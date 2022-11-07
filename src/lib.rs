@@ -1,4 +1,5 @@
 mod lcs;
+mod patch;
 
 use core::result;
 use serde_json::map::Map;
