@@ -114,8 +114,16 @@ fn add_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
                     });
                 }
             } else {
-                // TODO: arr[idx]'s idx may index out of range
-                return add_json(&mut arr[idx], path, val);
+                if idx < arr.len() {
+                    return add_json(&mut arr[idx], path, val);
+                } else {
+                    return Err(Error {
+                        err: Box::new(ErrorCode::IndexOutOfRange {
+                            index: idx,
+                            len: arr.len(),
+                        }),
+                    });
+                }
             }
         }
         (_, PathElem::Index(_)) => {
