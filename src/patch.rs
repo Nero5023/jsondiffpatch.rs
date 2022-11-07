@@ -6,6 +6,7 @@ use serde_json::Value;
 #[derive(Debug)]
 pub enum Patch {
     Add(Value),
+    Remove,
 }
 
 #[derive(Debug)]
@@ -23,12 +24,17 @@ impl PatchElem {
         let mut clone_json = json.clone();
         match &self.patch {
             Patch::Add(v) => {
+                // TODO: check if need add check path empty here
                 if self.path.is_empty() {
                     Ok(v.clone())
                 } else {
                     add_json(&mut clone_json, &mut self.path.clone(), &v)?;
                     Ok(clone_json)
                 }
+            }
+            Patch::Remove => {
+                remove_json(&mut clone_json, &mut self.path.clone())?;
+                Ok(clone_json)
             }
             _ => todo!(),
         }
@@ -53,8 +59,10 @@ pub struct Error {
 #[derive(Debug)]
 pub(crate) enum ErrorCode {
     IndexOutOfRange { index: usize, len: usize },
-    ParentNodeDonotExit,
+    ParentNodeNotExist,
     TokenIsNotAnArray,
+    TokenIsNotAnObject,
+    PathNotExist,
 }
 
 pub type Result<T> = result::Result<T, Error>;
@@ -62,7 +70,7 @@ pub type Result<T> = result::Result<T, Error>;
 fn add_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
     if json.is_null() && !path.is_empty() {
         return Err(Error {
-            err: Box::new(ErrorCode::ParentNodeDonotExit),
+            err: Box::new(ErrorCode::ParentNodeNotExist),
         });
     }
     if path.is_empty() {
@@ -85,7 +93,7 @@ fn add_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
                     return Ok(());
                 } else {
                     return Err(Error {
-                        err: Box::new(ErrorCode::ParentNodeDonotExit),
+                        err: Box::new(ErrorCode::ParentNodeNotExist),
                     });
                 }
             }
@@ -106,6 +114,7 @@ fn add_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
                     });
                 }
             } else {
+                // TODO: arr[idx]'s idx may index out of range
                 return add_json(&mut arr[idx], path, val);
             }
         }
@@ -116,9 +125,80 @@ fn add_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
         }
         (_, PathElem::Key(_)) => {
             return Err(Error {
+                err: Box::new(ErrorCode::TokenIsNotAnObject),
+            });
+        }
+    }
+}
+
+fn remove_json(json: &mut Value, path: &mut Path) -> Result<()> {
+    if json.is_null() && !path.is_empty() {
+        return Err(Error {
+            err: Box::new(ErrorCode::ParentNodeNotExist),
+        });
+    }
+    // if path.is_empty() {
+    //     *json = val.clone();
+    //     return Ok(());
+    // }
+    if path.is_empty() {
+        return Ok(());
+    }
+    let path_elem = path.remove(0);
+
+    match (json, path_elem) {
+        (Value::Object(obj), PathElem::Key(key)) => {
+            if obj.contains_key(&key) {
+                return remove_json(&mut obj[&key], path);
+            } else {
+                if path.is_empty() {
+                    obj.remove(&key);
+                    return Ok(());
+                } else {
+                    return Err(Error {
+                        err: Box::new(ErrorCode::PathNotExist),
+                    });
+                }
+            }
+        }
+        (Value::Array(arr), PathElem::Index(idx)) => {
+            // TODO: move two Err to one if (reorg if)
+            if path.is_empty() {
+                if idx < arr.len() {
+                    arr.remove(idx);
+                    return Ok(());
+                } else {
+                    return Err(Error {
+                        err: Box::new(ErrorCode::IndexOutOfRange {
+                            index: idx,
+                            len: arr.len(),
+                        }),
+                    });
+                }
+            } else {
+                if idx < arr.len() {
+                    return remove_json(&mut arr[idx], path);
+                } else {
+                    return Err(Error {
+                        err: Box::new(ErrorCode::IndexOutOfRange {
+                            index: idx,
+                            len: arr.len(),
+                        }),
+                    });
+                }
+            }
+        }
+        (_, PathElem::Index(_)) => {
+            return Err(Error {
                 err: Box::new(ErrorCode::TokenIsNotAnArray),
             });
         }
+        (_, PathElem::Key(_)) => {
+            return Err(Error {
+                err: Box::new(ErrorCode::TokenIsNotAnObject),
+            });
+        }
+        _ => todo!(),
     }
 }
 
