@@ -7,6 +7,7 @@ use serde_json::Value;
 pub enum Patch {
     Add(Value),
     Remove,
+    Replace(Value),
 }
 
 #[derive(Debug)]
@@ -23,6 +24,7 @@ impl PatchElem {
     fn apply(&self, json: &Value) -> Result<Value> {
         let mut clone_json = json.clone();
         match &self.patch {
+            // TODO: refactor code
             Patch::Add(v) => {
                 // TODO: check if need add check path empty here
                 if self.path.is_empty() {
@@ -34,6 +36,10 @@ impl PatchElem {
             }
             Patch::Remove => {
                 remove_json(&mut clone_json, &mut self.path.clone())?;
+                Ok(clone_json)
+            }
+            Patch::Replace(val) => {
+                replace_json(&mut clone_json, &mut self.path.clone(), &val)?;
                 Ok(clone_json)
             }
             _ => todo!(),
@@ -207,6 +213,73 @@ fn remove_json(json: &mut Value, path: &mut Path) -> Result<()> {
             });
         }
         _ => todo!(),
+    }
+}
+
+fn replace_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
+    if json.is_null() && !path.is_empty() {
+        return Err(Error {
+            err: Box::new(ErrorCode::ParentNodeNotExist),
+        });
+    }
+
+    if path.is_empty() {
+        *json = val.clone();
+        return Ok(());
+    }
+    let path_elem = path.remove(0);
+
+    match (json, path_elem) {
+        (Value::Object(obj), PathElem::Key(key)) => {
+            if obj.contains_key(&key) {
+                return replace_json(&mut obj[&key], path, val);
+            } else {
+                if path.is_empty() {
+                    obj[&key] = val.clone();
+                    return Ok(());
+                } else {
+                    return Err(Error {
+                        err: Box::new(ErrorCode::ParentNodeNotExist),
+                    });
+                }
+            }
+        }
+        (Value::Array(arr), PathElem::Index(idx)) => {
+            if path.is_empty() {
+                if idx < arr.len() {
+                    arr[idx] = val.clone();
+                    return Ok(());
+                } else {
+                    return Err(Error {
+                        err: Box::new(ErrorCode::IndexOutOfRange {
+                            index: idx,
+                            len: arr.len(),
+                        }),
+                    });
+                }
+            } else {
+                if idx < arr.len() {
+                    return replace_json(&mut arr[idx], path, val);
+                } else {
+                    return Err(Error {
+                        err: Box::new(ErrorCode::IndexOutOfRange {
+                            index: idx,
+                            len: arr.len(),
+                        }),
+                    });
+                }
+            }
+        }
+        (_, PathElem::Index(_)) => {
+            return Err(Error {
+                err: Box::new(ErrorCode::TokenIsNotAnArray),
+            });
+        }
+        (_, PathElem::Key(_)) => {
+            return Err(Error {
+                err: Box::new(ErrorCode::TokenIsNotAnObject),
+            });
+        }
     }
 }
 
