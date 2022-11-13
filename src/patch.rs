@@ -84,10 +84,6 @@ fn add_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
         return Ok(());
     }
     let path_elem = path.remove(0);
-    println!("{}", json);
-    println!("{}", json.is_object());
-    println!("{}", json.is_array());
-    println!("{}", json.is_string());
 
     match (json, path_elem) {
         (Value::Object(obj), PathElem::Key(key)) => {
