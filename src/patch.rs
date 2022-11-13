@@ -424,4 +424,75 @@ mod tests {
         assert_eq!(res, expected);
         Ok(())
     }
+
+    #[test]
+    fn replace_simple_key() -> Result<()> {
+        let data = r#"
+        {
+            "foo": {
+                "bar": 2,
+                "baz": "world"
+            }
+        }
+        "#;
+        let patch = PatchElem {
+            patch: Patch::Replace(json!("hello")),
+            path: Path::new(vec![
+                PathElem::Key("foo".to_string()),
+                PathElem::Key("baz".to_string()),
+            ]),
+        };
+
+        let jp = JsonPatch {
+            patches: vec![patch],
+        };
+        let res = jp.apply(&serde_json::from_str(data)?).unwrap();
+        let expected_str = r#"
+        {
+            "foo": {
+                "bar": 2,
+                "baz": "hello"
+            }
+        }
+        "#;
+        let expected: Value = serde_json::from_str(expected_str)?;
+        assert_eq!(res, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn replace_simple_index_key() -> Result<()> {
+        let data = r#"
+        {
+            "foo": {
+                "bar": 2,
+                "baz": [1, 2, 3]
+            }
+        }
+        "#;
+        let patch = PatchElem {
+            patch: Patch::Replace(json!("hello")),
+            path: Path::new(vec![
+                PathElem::Key("foo".to_string()),
+                PathElem::Key("baz".to_string()),
+                PathElem::Index(1),
+            ]),
+        };
+
+        let jp = JsonPatch {
+            patches: vec![patch],
+        };
+        let res = jp.apply(&serde_json::from_str(data)?).unwrap();
+        let expected_str = r#"
+        {
+            "foo": {
+                "bar": 2,
+                "baz": [1, "hello", 3]
+            }
+        }
+        "#;
+        let expected: Value = serde_json::from_str(expected_str)?;
+        assert_eq!(res, expected);
+        Ok(())
+    }
 }
