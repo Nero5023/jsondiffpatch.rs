@@ -151,10 +151,6 @@ fn remove_json(json: &mut Value, path: &mut Path) -> Result<()> {
             err: Box::new(ErrorCode::ParentNodeNotExist),
         });
     }
-    // if path.is_empty() {
-    //     *json = val.clone();
-    //     return Ok(());
-    // }
     if path.is_empty() {
         return Ok(());
     }
@@ -163,16 +159,16 @@ fn remove_json(json: &mut Value, path: &mut Path) -> Result<()> {
     match (json, path_elem) {
         (Value::Object(obj), PathElem::Key(key)) => {
             if obj.contains_key(&key) {
-                return remove_json(&mut obj[&key], path);
-            } else {
                 if path.is_empty() {
                     obj.remove(&key);
                     return Ok(());
                 } else {
-                    return Err(Error {
-                        err: Box::new(ErrorCode::PathNotExist),
-                    });
+                    return remove_json(&mut obj[&key], path);
                 }
+            } else {
+                return Err(Error {
+                    err: Box::new(ErrorCode::PathNotExist),
+                });
             }
         }
         (Value::Array(arr), PathElem::Index(idx)) => {
@@ -212,7 +208,6 @@ fn remove_json(json: &mut Value, path: &mut Path) -> Result<()> {
                 err: Box::new(ErrorCode::TokenIsNotAnObject),
             });
         }
-        _ => todo!(),
     }
 }
 
@@ -356,6 +351,76 @@ mod tests {
             "foo": {
                 "bar": 2,
                 "baz": [1, 2, 3]
+            }
+        }
+        "#;
+        let expected: Value = serde_json::from_str(expected_str)?;
+        assert_eq!(res, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn remove_simple_key() -> Result<()> {
+        let data = r#"
+        {
+            "foo": {
+                "bar": 2,
+                "baz": "hello"
+            }
+        }
+        "#;
+        let patch = PatchElem {
+            patch: Patch::Remove,
+            path: Path::new(vec![
+                PathElem::Key("foo".to_string()),
+                PathElem::Key("baz".to_string()),
+            ]),
+        };
+
+        let jp = JsonPatch {
+            patches: vec![patch],
+        };
+        let res = jp.apply(&serde_json::from_str(data)?).unwrap();
+        let expected_str = r#"
+        {
+            "foo": {
+                "bar": 2
+            }
+        }
+        "#;
+        let expected: Value = serde_json::from_str(expected_str)?;
+        assert_eq!(res, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn remove_simple_index_key() -> Result<()> {
+        let data = r#"
+        {
+            "foo": {
+                "bar": 2,
+                "baz": [1, 2, 3]
+            }
+        }
+        "#;
+        let patch = PatchElem {
+            patch: Patch::Remove,
+            path: Path::new(vec![
+                PathElem::Key("foo".to_string()),
+                PathElem::Key("baz".to_string()),
+                PathElem::Index(1),
+            ]),
+        };
+
+        let jp = JsonPatch {
+            patches: vec![patch],
+        };
+        let res = jp.apply(&serde_json::from_str(data)?).unwrap();
+        let expected_str = r#"
+        {
+            "foo": {
+                "bar": 2,
+                "baz": [1, 3]
             }
         }
         "#;
