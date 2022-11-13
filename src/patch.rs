@@ -298,7 +298,7 @@ mod tests {
     fn add_simple_key() -> Result<()> {
         let data = r#"
         {
-            "q": {
+            "foo": {
                 "bar": 2
             }
         }
@@ -306,8 +306,8 @@ mod tests {
         let patch = PatchElem {
             patch: Patch::Add(json!("hello")),
             path: Path::new(vec![
-                PathElem::Key("q".to_string()),
-                PathElem::Key("a".to_string()),
+                PathElem::Key("foo".to_string()),
+                PathElem::Key("baz".to_string()),
             ]),
         };
 
@@ -315,7 +315,16 @@ mod tests {
             patches: vec![patch],
         };
         let res = jp.apply(&serde_json::from_str(data)?).unwrap();
-        println!("{}", res);
+        let expected_str = r#"
+        {
+            "foo": {
+                "bar": 2,
+                "baz": "hello"
+            }
+        }
+        "#;
+        let expected: Value = serde_json::from_str(expected_str)?;
+        assert_eq!(res, expected);
         Ok(())
     }
 }
