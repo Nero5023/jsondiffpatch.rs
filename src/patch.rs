@@ -26,13 +26,8 @@ impl PatchElem {
         match &self.patch {
             // TODO: refactor code
             Patch::Add(v) => {
-                // TODO: check if need add check path empty here
-                if self.path.is_empty() {
-                    Ok(v.clone())
-                } else {
-                    add_json(&mut clone_json, &mut self.path.clone(), &v)?;
-                    Ok(clone_json)
-                }
+                add_json(&mut clone_json, &mut self.path.clone(), &v)?;
+                Ok(clone_json)
             }
             Patch::Remove => {
                 remove_json(&mut clone_json, &mut self.path.clone())?;
