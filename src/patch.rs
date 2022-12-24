@@ -592,4 +592,39 @@ mod tests {
         assert_eq!(res, expected);
         Ok(())
     }
+
+    #[test]
+    fn move_a_value() -> Result<()> {
+        let data = r#"
+            {
+                "foo": {
+                    "bar": "baz",
+                    "waldo": "fred"
+            },
+                "qux": {
+                    "corge": "grault"
+                }
+            }"#;
+        let patch: PatchElem =
+            PatchElem::try_from(r#"{ "op": "move", "from": "/foo/waldo", "path": "/qux/thud" }"#)
+                .unwrap();
+        let jp = JsonPatch {
+            patches: vec![patch],
+        };
+        let res = jp.apply(&serde_json::from_str(data)?).unwrap();
+        let expected_str = r#"
+            {
+                "foo": {
+                    "bar": "baz"
+                },
+                "qux": {
+                    "corge": "grault",
+                    "thud": "fred"
+                }
+           }"#;
+        let expected: Value = serde_json::from_str(expected_str)?;
+
+        assert_eq!(res, expected);
+        Ok(())
+    }
 }
