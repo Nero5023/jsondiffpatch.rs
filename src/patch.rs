@@ -593,6 +593,17 @@ mod tests {
         Ok(())
     }
 
+    fn test_json_patch(json: &str, patch_str: &str, expected_json_str: &str) -> Result<()> {
+        let patch: PatchElem = PatchElem::try_from(patch_str).unwrap();
+        let jp = JsonPatch {
+            patches: vec![patch],
+        };
+        let res = jp.apply(&serde_json::from_str(json)?).unwrap();
+        let expected: Value = serde_json::from_str(expected_json_str)?;
+        assert_eq!(res, expected);
+        Ok(())
+    }
+
     #[test]
     fn move_a_value() -> Result<()> {
         let data = r#"
@@ -605,13 +616,7 @@ mod tests {
                     "corge": "grault"
                 }
             }"#;
-        let patch: PatchElem =
-            PatchElem::try_from(r#"{ "op": "move", "from": "/foo/waldo", "path": "/qux/thud" }"#)
-                .unwrap();
-        let jp = JsonPatch {
-            patches: vec![patch],
-        };
-        let res = jp.apply(&serde_json::from_str(data)?).unwrap();
+        let patch_str = r#"{ "op": "move", "from": "/foo/waldo", "path": "/qux/thud" }"#;
         let expected_str = r#"
             {
                 "foo": {
@@ -622,9 +627,17 @@ mod tests {
                     "thud": "fred"
                 }
            }"#;
-        let expected: Value = serde_json::from_str(expected_str)?;
 
-        assert_eq!(res, expected);
+        test_json_patch(data, patch_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn move_an_array_element() -> Result<()> {
+        let data = r#"{ "foo": [ "all", "grass", "cows", "eat" ] }"#;
+        let patch_str = r#"{ "op": "move", "from": "/foo/1", "path": "/foo/3" }"#;
+        let expected_str = r#"{ "foo": [ "all", "cows", "eat", "grass" ] }"#;
+        test_json_patch(data, patch_str, expected_str)?;
         Ok(())
     }
 }
