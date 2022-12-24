@@ -2,18 +2,70 @@ use crate::Path;
 use crate::PathElem;
 use core::result;
 use serde_json::Value;
+use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
+
+#[derive(Serialize, Deserialize)]
+struct Operation {
+    op: String,
+    path: String,
+    value: Option<Value>,
+    from: Option<String>,
+}
+
+impl From<PatchElem> for Operation {
+    fn from(patch_elem: PatchElem) -> Self {
+        let path = patch_elem.path;
+        match patch_elem.patch {
+            Patch::Add(val) => Operation { op: "add".to_owned(), path: path.to_string(), value: Some(val), from: None  },
+            Patch::Remove => Operation { op: "remove".to_owned(), path: path.to_string(), value: None, from: None },
+            Patch::Replace(val) => Operation { op: "move".to_string(), path: path.to_string(), value: Some(val), from: None },
+            Patch::Move { from } => Operation { op: "from".to_string(), path: path.to_string(), value: None, from: Some(from.to_string()) },
+        }
+    }
+}
+
+impl TryInto<PatchElem> for Operation {
+    type Error = String;
+
+    fn try_into(self) -> std::result::Result<PatchElem, Self::Error> {
+        let path = Path::try_from(self.path)?;
+        match self.op.as_str() {
+            "add" => Ok(PatchElem { patch: Patch::Add(self.value.ok_or("add operaton does not have 'value' field")?), path }),
+            "remove" => Ok( PatchElem { patch: Patch::Remove, path }),
+            "replace" => Ok(PatchElem { patch: Patch::Replace( self.value.ok_or("replace operation does not have 'value' field")? ), path }),
+            "move" => Ok(PatchElem { patch: Patch::Move { from: self.from.ok_or("move operation does not have 'from' field")?.try_into()? }, path}),
+            _ => Err(format!("Unsupport op '{}'", self.op))
+        }
+    }
+}
+
+
 
 #[derive(Debug)]
 pub enum Patch {
     Add(Value),
     Remove,
     Replace(Value),
+    Move{ from: Path },
 }
 
 #[derive(Debug)]
 pub struct PatchElem {
     patch: Patch,
     path: Path,
+}
+
+impl TryFrom<&str> for PatchElem {
+    type Error = String;
+
+    fn try_from(s: &str) -> std::result::Result<Self, Self::Error> {
+        let res: std::result::Result<Operation, _> = serde_json::from_str(s);
+        match res {
+            Ok(op) => Ok(op.try_into()?),
+            Err(e) => Err(e.to_string())
+        }
+    }
 }
 
 pub struct JsonPatch {
@@ -35,6 +87,11 @@ impl PatchElem {
             }
             Patch::Replace(val) => {
                 replace_json(&mut clone_json, &mut self.path.clone(), &val)?;
+                Ok(clone_json)
+            }
+            Patch::Move { from } => {
+                let removed_val = remove_json(&mut clone_json,  &mut from.clone())?;
+                add_json(&mut clone_json, &mut self.path.clone(), &removed_val)?;
                 Ok(clone_json)
             }
             _ => todo!(),
@@ -136,23 +193,26 @@ fn add_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
     }
 }
 
-fn remove_json(json: &mut Value, path: &mut Path) -> Result<()> {
+fn remove_json(json: &mut Value, path: &mut Path) -> Result<Value> {
     if json.is_null() && !path.is_empty() {
         return Err(Error {
             err: Box::new(ErrorCode::ParentNodeNotExist),
         });
     }
+
+    // TODO: this case is for init state, json is some Value, but path is empty
     if path.is_empty() {
-        return Ok(());
+        return Ok(json.clone());
     }
     let path_elem = path.remove(0);
 
     match (json, path_elem) {
         (Value::Object(obj), PathElem::Key(key)) => {
-            if obj.contains_key(&key) {
+            if let Some(child) = obj.get(&key) {
                 if path.is_empty() {
+                    let removed_val = child.clone();
                     obj.remove(&key);
-                    return Ok(());
+                    return Ok(removed_val);
                 } else {
                     return remove_json(&mut obj[&key], path);
                 }
@@ -166,8 +226,9 @@ fn remove_json(json: &mut Value, path: &mut Path) -> Result<()> {
             // TODO: move two Err to one if (reorg if)
             if path.is_empty() {
                 if idx < arr.len() {
+                    let remove_val = arr[idx].clone();
                     arr.remove(idx);
-                    return Ok(());
+                    return Ok(remove_val);
                 } else {
                     return Err(Error {
                         err: Box::new(ErrorCode::IndexOutOfRange {

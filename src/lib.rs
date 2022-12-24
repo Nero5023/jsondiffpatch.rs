@@ -7,12 +7,14 @@ use serde_json::{Result, Value};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::error::Error;
-use std::fmt::Display;
+use std::fmt::{Display, format};
 use std::fs::File;
 use std::io::BufReader;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::string::ToString;
+use std::convert::From;
+use std::convert::TryFrom;
 
 fn read_json_str(s: &str) -> Result<Value> {
     let v: Value = serde_json::from_str(s)?;
@@ -47,9 +49,45 @@ impl Display for PathElem {
     }
 }
 
+impl From<&str> for PathElem {
+    fn from(s: &str) -> Self {
+        if let Ok(num) = s.parse::<usize>() {
+            PathElem::Index(num)
+        } else {
+            PathElem::Key(s.to_owned())
+        }
+    }
+}
+
+impl From<String> for PathElem {
+    fn from(s: String) -> Self {
+        PathElem::from(s.as_ref())
+    }
+}
+
 //type Path = Vec<PathElem>;
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Path(Vec<PathElem>);
+
+impl TryFrom<&str> for Path {
+    type Error = String;
+
+    fn try_from(s: &str) -> std::result::Result<Self, Self::Error> {
+        if !s.starts_with("/") {
+            return Err(format!("path '{}' should start with '/'", s));
+        }
+        let elems = s.split("/").into_iter().skip(1).map(|elem| elem.into()).collect::<Vec<PathElem>>();
+        Ok(Path(elems))
+    }
+}
+
+impl TryFrom<String> for Path {
+    type Error = String;
+
+    fn try_from(s: String) -> std::result::Result<Self, Self::Error> {
+        Path::try_from(s.as_ref())
+    }
+}
 
 impl Display for Path {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
