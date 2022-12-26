@@ -187,7 +187,6 @@ pub(crate) enum ErrorCode {
 
 pub type Result<T> = result::Result<T, Error>;
 
-
 // TODO: add_json use val reference, actually I think it should use ownership
 fn add_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
     if json.is_null() && !path.is_empty() {
@@ -401,7 +400,7 @@ fn retrieve_json<'a>(json: &'a Value, path: &Path) -> Result<&'a Value> {
         match (current_json, path_elem) {
             (Value::Object(obj), PathElem::Key(key)) => {
                 if let Some(child) = current_json.get(key) {
-                    if idx == path_len - 1{
+                    if idx == path_len - 1 {
                         return Ok(child);
                     } else {
                         current_json = child;
@@ -412,43 +411,43 @@ fn retrieve_json<'a>(json: &'a Value, path: &Path) -> Result<&'a Value> {
                     });
                 }
             }
-        (Value::Array(arr), PathElem::Index(idx)) => {
-            // TODO: move two Err to one if (reorg if)
-            let idx = *idx;
-            if idx == path_len - 1 {
-                if idx < arr.len() {
-                    return Ok(&arr[idx]);
+            (Value::Array(arr), PathElem::Index(idx)) => {
+                // TODO: move two Err to one if (reorg if)
+                let idx = *idx;
+                if idx == path_len - 1 {
+                    if idx < arr.len() {
+                        return Ok(&arr[idx]);
+                    } else {
+                        return Err(Error {
+                            err: Box::new(ErrorCode::IndexOutOfRange {
+                                index: idx,
+                                len: arr.len(),
+                            }),
+                        });
+                    }
                 } else {
-                    return Err(Error {
-                        err: Box::new(ErrorCode::IndexOutOfRange {
-                            index: idx,
-                            len: arr.len(),
-                        }),
-                    });
-                }
-            } else {
-                if idx < arr.len() {
-                    current_json = &arr[idx];
-                } else {
-                    return Err(Error {
-                        err: Box::new(ErrorCode::IndexOutOfRange {
-                            index: idx,
-                            len: arr.len(),
-                        }),
-                    });
+                    if idx < arr.len() {
+                        current_json = &arr[idx];
+                    } else {
+                        return Err(Error {
+                            err: Box::new(ErrorCode::IndexOutOfRange {
+                                index: idx,
+                                len: arr.len(),
+                            }),
+                        });
+                    }
                 }
             }
-        }
-        (_, PathElem::Index(_)) => {
-            return Err(Error {
-                err: Box::new(ErrorCode::TokenIsNotAnArray),
-            });
-        }
-        (_, PathElem::Key(_)) => {
-            return Err(Error {
-                err: Box::new(ErrorCode::TokenIsNotAnObject),
-            });
-        }
+            (_, PathElem::Index(_)) => {
+                return Err(Error {
+                    err: Box::new(ErrorCode::TokenIsNotAnArray),
+                });
+            }
+            (_, PathElem::Key(_)) => {
+                return Err(Error {
+                    err: Box::new(ErrorCode::TokenIsNotAnObject),
+                });
+            }
         }
     }
     unreachable!()
@@ -761,5 +760,4 @@ mod tests {
         test_json_patch(data, patch_str, expected_str)?;
         Ok(())
     }
-
 }
