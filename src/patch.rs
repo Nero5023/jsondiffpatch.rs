@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::convert::TryFrom;
 use thiserror::Error;
+// TODO: maybe use thiserror Result<T, JsonPatchError>
 use anyhow::Result;
 
 #[derive(Serialize, Deserialize)]
