@@ -1,9 +1,9 @@
-use crate::Path;
-use crate::PathElem;
-use core::result;
+use crate::{PathElem, Path};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::convert::TryFrom;
+use thiserror::Error;
+use anyhow::Result;
 
 #[derive(Serialize, Deserialize)]
 struct Operation {
@@ -206,13 +206,7 @@ impl PatchElem {
             Patch::Test(v) => {
                 let target = retrieve_json(&json, &self.path)?;
                 if v != target {
-                    return Err(Error {
-                        err: Box::new(ErrorCode::TestFail {
-                            path: self.path.clone(),
-                            expected: v.clone(),
-                            actual: target.clone(),
-                        }),
-                    });
+                    return Err(JsonPatchError::TestFail { path: self.path.clone(), expected: v.clone(), actual: target.clone() }.into());
                 }
                 Ok(clone_json)
             }
@@ -230,21 +224,27 @@ impl JsonPatch {
     }
 }
 
-#[derive(Debug)]
-pub struct Error {
-    err: Box<ErrorCode>,
-}
-
-#[derive(Debug)]
-pub(crate) enum ErrorCode {
+#[derive(Error, Debug)]
+pub enum JsonPatchError {
+    #[error("Index out of range (index: {index:?}, len: {len:?})")]
     IndexOutOfRange {
         index: usize,
         len: usize,
     },
+
+    #[error("Parent node not exit")]
     ParentNodeNotExist,
+
+    #[error("Token is not an array")]
     TokenIsNotAnArray,
+
+    #[error("Token is not an object")]
     TokenIsNotAnObject,
-    PathNotExist,
+
+    #[error("Path not exit")]
+    PathNotExit,
+
+    #[error("Patch operation `test` fail for path {path:?} (expected {expected:?}, found {actual:?})")]
     TestFail {
         path: Path,
         expected: Value,
@@ -252,14 +252,11 @@ pub(crate) enum ErrorCode {
     },
 }
 
-pub type Result<T> = result::Result<T, Error>;
 
 // TODO: add_json use val reference, actually I think it should use ownership
 fn add_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
     if json.is_null() && !path.is_empty() {
-        return Err(Error {
-            err: Box::new(ErrorCode::ParentNodeNotExist),
-        });
+        return Err(JsonPatchError::ParentNodeNotExist.into());
     }
     if path.is_empty() {
         *json = val.clone();
@@ -276,9 +273,7 @@ fn add_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
                     obj.insert(key.clone(), val.clone());
                     return Ok(());
                 } else {
-                    return Err(Error {
-                        err: Box::new(ErrorCode::ParentNodeNotExist),
-                    });
+                    return Err(JsonPatchError::ParentNodeNotExist.into());
                 }
             }
             //return add_json(&mut json[&key], path, val);
@@ -290,44 +285,32 @@ fn add_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
                     arr.insert(idx, val.clone());
                     return Ok(());
                 } else {
-                    return Err(Error {
-                        err: Box::new(ErrorCode::IndexOutOfRange {
-                            index: idx,
-                            len: arr.len(),
-                        }),
-                    });
+                    return Err(
+                        JsonPatchError::IndexOutOfRange { index: idx, len: arr.len() }.into()
+                    );
                 }
             } else {
                 if idx < arr.len() {
                     return add_json(&mut arr[idx], path, val);
                 } else {
-                    return Err(Error {
-                        err: Box::new(ErrorCode::IndexOutOfRange {
-                            index: idx,
-                            len: arr.len(),
-                        }),
-                    });
+                    return Err(
+                        JsonPatchError::IndexOutOfRange { index: idx, len: arr.len() }.into()
+                              );
                 }
             }
         }
         (_, PathElem::Index(_)) => {
-            return Err(Error {
-                err: Box::new(ErrorCode::TokenIsNotAnArray),
-            });
+            return Err(JsonPatchError::TokenIsNotAnArray.into());
         }
         (_, PathElem::Key(_)) => {
-            return Err(Error {
-                err: Box::new(ErrorCode::TokenIsNotAnObject),
-            });
+            return Err(JsonPatchError::TokenIsNotAnObject.into());
         }
     }
 }
 
 fn remove_json(json: &mut Value, path: &mut Path) -> Result<Value> {
     if json.is_null() && !path.is_empty() {
-        return Err(Error {
-            err: Box::new(ErrorCode::ParentNodeNotExist),
-        });
+        return Err(JsonPatchError::ParentNodeNotExist.into());
     }
 
     // TODO: this case is for init state, json is some Value, but path is empty
@@ -347,9 +330,7 @@ fn remove_json(json: &mut Value, path: &mut Path) -> Result<Value> {
                     return remove_json(&mut obj[&key], path);
                 }
             } else {
-                return Err(Error {
-                    err: Box::new(ErrorCode::PathNotExist),
-                });
+                return Err(JsonPatchError::ParentNodeNotExist.into());
             }
         }
         (Value::Array(arr), PathElem::Index(idx)) => {
@@ -360,44 +341,31 @@ fn remove_json(json: &mut Value, path: &mut Path) -> Result<Value> {
                     arr.remove(idx);
                     return Ok(remove_val);
                 } else {
-                    return Err(Error {
-                        err: Box::new(ErrorCode::IndexOutOfRange {
-                            index: idx,
-                            len: arr.len(),
-                        }),
-                    });
+                    return Err(JsonPatchError::IndexOutOfRange { index: idx, len: arr.len()
+                    }.into());
                 }
             } else {
                 if idx < arr.len() {
                     return remove_json(&mut arr[idx], path);
                 } else {
-                    return Err(Error {
-                        err: Box::new(ErrorCode::IndexOutOfRange {
-                            index: idx,
-                            len: arr.len(),
-                        }),
-                    });
+                    return Err(JsonPatchError::IndexOutOfRange { index: idx, len: arr.len()
+                    }.into());
                 }
             }
         }
         (_, PathElem::Index(_)) => {
-            return Err(Error {
-                err: Box::new(ErrorCode::TokenIsNotAnArray),
-            });
+            return Err(JsonPatchError::TokenIsNotAnArray.into());
+
         }
         (_, PathElem::Key(_)) => {
-            return Err(Error {
-                err: Box::new(ErrorCode::TokenIsNotAnObject),
-            });
+            return Err(JsonPatchError::TokenIsNotAnObject.into());
         }
     }
 }
 
 fn replace_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
     if json.is_null() && !path.is_empty() {
-        return Err(Error {
-            err: Box::new(ErrorCode::ParentNodeNotExist),
-        });
+        return Err(JsonPatchError::ParentNodeNotExist.into());
     }
 
     if path.is_empty() {
@@ -415,9 +383,7 @@ fn replace_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
                     obj[&key] = val.clone();
                     return Ok(());
                 } else {
-                    return Err(Error {
-                        err: Box::new(ErrorCode::ParentNodeNotExist),
-                    });
+                    return Err(JsonPatchError::ParentNodeNotExist.into());
                 }
             }
         }
@@ -427,35 +393,23 @@ fn replace_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
                     arr[idx] = val.clone();
                     return Ok(());
                 } else {
-                    return Err(Error {
-                        err: Box::new(ErrorCode::IndexOutOfRange {
-                            index: idx,
-                            len: arr.len(),
-                        }),
-                    });
+                    return Err(JsonPatchError::IndexOutOfRange { index: idx, len: arr.len()
+                    }.into());
                 }
             } else {
                 if idx < arr.len() {
                     return replace_json(&mut arr[idx], path, val);
                 } else {
-                    return Err(Error {
-                        err: Box::new(ErrorCode::IndexOutOfRange {
-                            index: idx,
-                            len: arr.len(),
-                        }),
-                    });
+                    return Err(JsonPatchError::IndexOutOfRange { index: idx, len: arr.len()
+                    }.into());
                 }
             }
         }
         (_, PathElem::Index(_)) => {
-            return Err(Error {
-                err: Box::new(ErrorCode::TokenIsNotAnArray),
-            });
+            return Err(JsonPatchError::TokenIsNotAnArray.into());
         }
         (_, PathElem::Key(_)) => {
-            return Err(Error {
-                err: Box::new(ErrorCode::TokenIsNotAnObject),
-            });
+            return Err(JsonPatchError::TokenIsNotAnObject.into());
         }
     }
 }
@@ -473,9 +427,8 @@ fn retrieve_json<'a>(json: &'a Value, path: &Path) -> Result<&'a Value> {
                         current_json = child;
                     }
                 } else {
-                    return Err(Error {
-                        err: Box::new(ErrorCode::PathNotExist),
-                    });
+                    //TODO: check PahtNotExit and ParentNodeNotExist, if need both, and difference
+                    return Err(JsonPatchError::PathNotExit.into());
                 }
             }
             (Value::Array(arr), PathElem::Index(idx)) => {
@@ -485,35 +438,23 @@ fn retrieve_json<'a>(json: &'a Value, path: &Path) -> Result<&'a Value> {
                     if idx < arr.len() {
                         return Ok(&arr[idx]);
                     } else {
-                        return Err(Error {
-                            err: Box::new(ErrorCode::IndexOutOfRange {
-                                index: idx,
-                                len: arr.len(),
-                            }),
-                        });
+                        return Err(JsonPatchError::IndexOutOfRange { index: idx, len: arr.len()
+                        }.into());
                     }
                 } else {
                     if idx < arr.len() {
                         current_json = &arr[idx];
                     } else {
-                        return Err(Error {
-                            err: Box::new(ErrorCode::IndexOutOfRange {
-                                index: idx,
-                                len: arr.len(),
-                            }),
-                        });
+                        return Err(JsonPatchError::IndexOutOfRange { index: idx, len: arr.len()
+                        }.into());
                     }
                 }
             }
             (_, PathElem::Index(_)) => {
-                return Err(Error {
-                    err: Box::new(ErrorCode::TokenIsNotAnArray),
-                });
+                return Err(JsonPatchError::TokenIsNotAnArray.into());
             }
             (_, PathElem::Key(_)) => {
-                return Err(Error {
-                    err: Box::new(ErrorCode::TokenIsNotAnObject),
-                });
+                return Err(JsonPatchError::TokenIsNotAnObject.into());
             }
         }
     }
