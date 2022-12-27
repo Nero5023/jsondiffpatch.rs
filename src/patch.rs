@@ -4,7 +4,7 @@ use serde_json::Value;
 use std::convert::TryFrom;
 use thiserror::Error;
 // TODO: maybe use thiserror Result<T, JsonPatchError>
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 #[derive(Serialize, Deserialize)]
 struct Operation {
@@ -59,7 +59,7 @@ impl From<PatchElem> for Operation {
 }
 
 impl TryInto<PatchElem> for Operation {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_into(self) -> std::result::Result<PatchElem, Self::Error> {
         let path = Path::try_from(self.path)?;
@@ -67,7 +67,7 @@ impl TryInto<PatchElem> for Operation {
             "add" => Ok(PatchElem {
                 patch: Patch::Add(
                     self.value
-                        .ok_or("add operaton does not have 'value' field")?,
+                        .ok_or(anyhow!("add operaton does not have 'value' field"))?,
                 ),
                 path,
             }),
@@ -78,7 +78,7 @@ impl TryInto<PatchElem> for Operation {
             "replace" => Ok(PatchElem {
                 patch: Patch::Replace(
                     self.value
-                        .ok_or("replace operation does not have 'value' field")?,
+                        .ok_or(anyhow!("replace operation does not have 'value' field"))?,
                 ),
                 path,
             }),
@@ -86,7 +86,7 @@ impl TryInto<PatchElem> for Operation {
                 patch: Patch::Move {
                     from: self
                         .from
-                        .ok_or("move operation does not have 'from' field")?
+                        .ok_or(anyhow!("move operation does not have 'from' field"))?
                         .try_into()?,
                 },
                 path,
@@ -95,7 +95,7 @@ impl TryInto<PatchElem> for Operation {
                 patch: Patch::Copy {
                     from: self
                         .from
-                        .ok_or("copy operation does not have 'from' field")?
+                        .ok_or(anyhow!("copy operation does not have 'from' field"))?
                         .try_into()?,
                 },
                 path,
@@ -103,11 +103,11 @@ impl TryInto<PatchElem> for Operation {
             "test" => Ok(PatchElem {
                 patch: Patch::Test(
                     self.value
-                        .ok_or("test operation does not have 'value' filed")?,
+                        .ok_or(anyhow!("test operation does not have 'value' filed"))?,
                 ),
                 path,
             }),
-            _ => Err(format!("Unsupport op '{}'", self.op)),
+            _ => Err(anyhow!("Unsupport op '{}'", self.op)),
         }
     }
 }
@@ -129,19 +129,19 @@ pub struct PatchElem {
 }
 
 impl TryFrom<&str> for PatchElem {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_from(s: &str) -> std::result::Result<Self, Self::Error> {
         let res: std::result::Result<Operation, _> = serde_json::from_str(s);
         match res {
             Ok(op) => Ok(op.try_into()?),
-            Err(e) => Err(e.to_string()),
+            Err(e) => Err(e.into()),
         }
     }
 }
 
 impl TryFrom<String> for PatchElem {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
         PatchElem::try_from(value.as_ref())
@@ -153,7 +153,7 @@ pub struct JsonPatch {
 }
 
 impl TryFrom<&str> for JsonPatch {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_from(s: &str) -> std::result::Result<Self, Self::Error> {
         let ops_res: std::result::Result<Vec<Operation>, _> = serde_json::from_str(s);
@@ -164,13 +164,13 @@ impl TryFrom<&str> for JsonPatch {
                 let patches = res?;
                 Ok(JsonPatch { patches })
             }
-            Err(e) => Err(e.to_string()),
+            Err(e) => Err(e.into()),
         }
     }
 }
 
 impl TryFrom<String> for JsonPatch {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_from(s: String) -> std::result::Result<Self, Self::Error> {
         JsonPatch::try_from(s.as_ref())

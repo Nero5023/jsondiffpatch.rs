@@ -15,6 +15,7 @@ use std::ops::DerefMut;
 use std::string::ToString;
 use std::convert::From;
 use std::convert::TryFrom;
+use anyhow::anyhow;
 
 fn read_json_str(s: &str) -> Result<Value> {
     let v: Value = serde_json::from_str(s)?;
@@ -70,11 +71,11 @@ impl From<String> for PathElem {
 pub struct Path(Vec<PathElem>);
 
 impl TryFrom<&str> for Path {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_from(s: &str) -> std::result::Result<Self, Self::Error> {
         if !s.starts_with("/") {
-            return Err(format!("path '{}' should start with '/'", s));
+            return Err(anyhow!("path '{}' should start with '/'", s));
         }
         let elems = s.split("/").into_iter().skip(1).map(|elem| elem.into()).collect::<Vec<PathElem>>();
         Ok(Path(elems))
@@ -82,7 +83,7 @@ impl TryFrom<&str> for Path {
 }
 
 impl TryFrom<String> for Path {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_from(s: String) -> std::result::Result<Self, Self::Error> {
         Path::try_from(s.as_ref())
