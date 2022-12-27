@@ -1,4 +1,4 @@
-use crate::{PathElem, Path};
+use crate::{Path, PathElem};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::convert::TryFrom;
@@ -207,7 +207,12 @@ impl PatchElem {
             Patch::Test(v) => {
                 let target = retrieve_json(&json, &self.path)?;
                 if v != target {
-                    return Err(JsonPatchError::TestFail { path: self.path.clone(), expected: v.clone(), actual: target.clone() }.into());
+                    return Err(JsonPatchError::TestFail {
+                        path: self.path.clone(),
+                        expected: v.clone(),
+                        actual: target.clone(),
+                    }
+                    .into());
                 }
                 Ok(clone_json)
             }
@@ -228,10 +233,7 @@ impl JsonPatch {
 #[derive(Error, Debug)]
 pub enum JsonPatchError {
     #[error("Index out of range (index: {index:?}, len: {len:?})")]
-    IndexOutOfRange {
-        index: usize,
-        len: usize,
-    },
+    IndexOutOfRange { index: usize, len: usize },
 
     #[error("Parent node not exit")]
     ParentNodeNotExist,
@@ -245,14 +247,15 @@ pub enum JsonPatchError {
     #[error("Path not exit")]
     PathNotExit,
 
-    #[error("Patch operation `test` fail for path {path:?} (expected {expected:?}, found {actual:?})")]
+    #[error(
+        "Patch operation `test` fail for path {path:?} (expected {expected:?}, found {actual:?})"
+    )]
     TestFail {
         path: Path,
         expected: Value,
         actual: Value,
     },
 }
-
 
 // TODO: add_json use val reference, actually I think it should use ownership
 fn add_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
@@ -286,17 +289,21 @@ fn add_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
                     arr.insert(idx, val.clone());
                     return Ok(());
                 } else {
-                    return Err(
-                        JsonPatchError::IndexOutOfRange { index: idx, len: arr.len() }.into()
-                    );
+                    return Err(JsonPatchError::IndexOutOfRange {
+                        index: idx,
+                        len: arr.len(),
+                    }
+                    .into());
                 }
             } else {
                 if idx < arr.len() {
                     return add_json(&mut arr[idx], path, val);
                 } else {
-                    return Err(
-                        JsonPatchError::IndexOutOfRange { index: idx, len: arr.len() }.into()
-                              );
+                    return Err(JsonPatchError::IndexOutOfRange {
+                        index: idx,
+                        len: arr.len(),
+                    }
+                    .into());
                 }
             }
         }
@@ -342,21 +349,26 @@ fn remove_json(json: &mut Value, path: &mut Path) -> Result<Value> {
                     arr.remove(idx);
                     return Ok(remove_val);
                 } else {
-                    return Err(JsonPatchError::IndexOutOfRange { index: idx, len: arr.len()
-                    }.into());
+                    return Err(JsonPatchError::IndexOutOfRange {
+                        index: idx,
+                        len: arr.len(),
+                    }
+                    .into());
                 }
             } else {
                 if idx < arr.len() {
                     return remove_json(&mut arr[idx], path);
                 } else {
-                    return Err(JsonPatchError::IndexOutOfRange { index: idx, len: arr.len()
-                    }.into());
+                    return Err(JsonPatchError::IndexOutOfRange {
+                        index: idx,
+                        len: arr.len(),
+                    }
+                    .into());
                 }
             }
         }
         (_, PathElem::Index(_)) => {
             return Err(JsonPatchError::TokenIsNotAnArray.into());
-
         }
         (_, PathElem::Key(_)) => {
             return Err(JsonPatchError::TokenIsNotAnObject.into());
@@ -394,15 +406,21 @@ fn replace_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
                     arr[idx] = val.clone();
                     return Ok(());
                 } else {
-                    return Err(JsonPatchError::IndexOutOfRange { index: idx, len: arr.len()
-                    }.into());
+                    return Err(JsonPatchError::IndexOutOfRange {
+                        index: idx,
+                        len: arr.len(),
+                    }
+                    .into());
                 }
             } else {
                 if idx < arr.len() {
                     return replace_json(&mut arr[idx], path, val);
                 } else {
-                    return Err(JsonPatchError::IndexOutOfRange { index: idx, len: arr.len()
-                    }.into());
+                    return Err(JsonPatchError::IndexOutOfRange {
+                        index: idx,
+                        len: arr.len(),
+                    }
+                    .into());
                 }
             }
         }
@@ -439,15 +457,21 @@ fn retrieve_json<'a>(json: &'a Value, path: &Path) -> Result<&'a Value> {
                     if idx < arr.len() {
                         return Ok(&arr[idx]);
                     } else {
-                        return Err(JsonPatchError::IndexOutOfRange { index: idx, len: arr.len()
-                        }.into());
+                        return Err(JsonPatchError::IndexOutOfRange {
+                            index: idx,
+                            len: arr.len(),
+                        }
+                        .into());
                     }
                 } else {
                     if idx < arr.len() {
                         current_json = &arr[idx];
                     } else {
-                        return Err(JsonPatchError::IndexOutOfRange { index: idx, len: arr.len()
-                        }.into());
+                        return Err(JsonPatchError::IndexOutOfRange {
+                            index: idx,
+                            len: arr.len(),
+                        }
+                        .into());
                     }
                 }
             }
@@ -579,7 +603,7 @@ mod tests {
                 { "op": "add", "path": "/child", "value": { "grandchild": { } } }
             ]
             "#;
-            let expected_str = r#"
+        let expected_str = r#"
                 {
                     "foo": "bar",
                     "child": {
@@ -761,7 +785,6 @@ mod tests {
         Ok(())
     }
 
-
     #[test]
     fn replace_a_value() -> Result<()> {
         let data = r#"
@@ -774,7 +797,7 @@ mod tests {
                 { "op": "replace", "path": "/baz", "value": "boo" }
             ]
             "#;
-            let expected_str = r#"
+        let expected_str = r#"
                 {
                     "baz": "boo",
                     "foo": "bar"
@@ -906,7 +929,7 @@ mod tests {
     //     test_json_patch_arr(data, patches_str, data);
     //     Ok(())
     // }
-    
+
     #[test]
     fn ignore_unrecognized_elements() -> Result<()> {
         let data = r#"{ "foo": "bar" }"#;
