@@ -602,6 +602,54 @@ mod tests {
     }
 
     #[test]
+    fn add_an_array_element() -> Result<()> {
+        let data = r#"{ "foo": [ "bar", "baz" ] }"#;
+        let patches_str = r#"
+            [
+                { "op": "add", "path": "/foo/1", "value": "qux" }
+            ]
+            "#;
+        let expected_str = r#"{ "foo": [ "bar", "qux", "baz" ] }"#;
+        test_json_patch_arr(data, patches_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn add_an_object_member() -> Result<()> {
+        let data = r#"{ "foo": "bar"}"#;
+        let patches_str = r#"
+            [
+                { "op": "add", "path": "/baz", "value": "qux" }
+            ]"#;
+        let expected_str = r#"{
+                "baz": "qux",
+                "foo": "bar"
+            }"#;
+        test_json_patch_arr(data, patches_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn add_a_nested_member_object() -> Result<()> {
+        let data = r#"{ "foo": "bar"}"#;
+        let patches_str = r#"
+            [
+                { "op": "add", "path": "/child", "value": { "grandchild": { } } }
+            ]
+            "#;
+            let expected_str = r#"
+                {
+                    "foo": "bar",
+                    "child": {
+                        "grandchild": {}
+                    }
+                }
+                "#;
+        test_json_patch_arr(data, patches_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
     fn remove_simple_key() -> Result<()> {
         let data = r#"
         {
@@ -668,6 +716,35 @@ mod tests {
         "#;
         let expected: Value = serde_json::from_str(expected_str)?;
         assert_eq!(res, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn remove_an_object_member() -> Result<()> {
+        let data = r#"{
+                "baz": "qux",
+                "foo": "bar"
+            }"#;
+        let patches_str = r#"
+            [
+                { "op": "remove", "path": "/baz" }
+            ]
+            "#;
+        let expected_str = r#"{ "foo": "bar" }"#;
+        test_json_patch_arr(data, patches_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn remove_an_array_element() -> Result<()> {
+        let data = r#"{ "foo": [ "bar", "qux", "baz" ] }"#;
+        let patches_str = r#"
+            [
+                { "op": "remove", "path": "/foo/1" }
+            ]
+            "#;
+        let expected_str = r#"{ "foo": [ "bar", "baz" ] }"#;
+        test_json_patch_arr(data, patches_str, expected_str)?;
         Ok(())
     }
 
@@ -739,6 +816,29 @@ mod tests {
         "#;
         let expected: Value = serde_json::from_str(expected_str)?;
         assert_eq!(res, expected);
+        Ok(())
+    }
+
+
+    #[test]
+    fn replace_a_value() -> Result<()> {
+        let data = r#"
+            {
+                "baz": "qux",
+                "foo": "bar"
+            }"#;
+        let patches_str = r#"
+            [
+                { "op": "replace", "path": "/baz", "value": "boo" }
+            ]
+            "#;
+            let expected_str = r#"
+                {
+                    "baz": "boo",
+                    "foo": "bar"
+                }
+                "#;
+        test_json_patch_arr(data, patches_str, expected_str)?;
         Ok(())
     }
 
@@ -849,6 +949,37 @@ mod tests {
                 { "op": "test", "path": "/foo/1", "value": 2 }
             ]"#;
         test_json_patch_arr(data, patches_str, data)?;
+        Ok(())
+    }
+
+    // TODO: add a value test error, after change error
+    // #[test]
+    // fn test_a_value_error() -> Result<()> {
+    //     let data = r#"{ "baz": "qux" }"#;
+    //     let patches_str = r#"
+    //         [
+    //             { "op": "test", "path": "/baz", "value": "bar" }
+    //         ]
+    //         "#;
+    //     test_json_patch_arr(data, patches_str, data);
+    //     Ok(())
+    // }
+    
+    #[test]
+    fn ignore_unrecognized_elements() -> Result<()> {
+        let data = r#"{ "foo": "bar" }"#;
+        let patch_str = r#"
+            [
+                { "op": "add", "path": "/baz", "value": "qux", "xyz": 123 }
+            ]
+            "#;
+        let expected_str = r#"
+            {
+                "foo": "bar",
+                "baz": "qux"
+            }
+            "#;
+        test_json_patch_arr(data, patch_str, expected_str)?;
         Ok(())
     }
 }
