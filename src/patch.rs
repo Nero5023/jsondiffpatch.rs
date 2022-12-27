@@ -47,6 +47,12 @@ impl From<PatchElem> for Operation {
                 value: None,
                 from: Some(from.to_string()),
             },
+            Patch::Test(val) => Operation {
+                op: "test".to_string(),
+                path: path.to_string(),
+                value: Some(val),
+                from: None,
+            },
         }
     }
 }
@@ -93,6 +99,13 @@ impl TryInto<PatchElem> for Operation {
                 },
                 path,
             }),
+            "test" => Ok(PatchElem {
+                patch: Patch::Test(
+                    self.value
+                        .ok_or("test operation does not have 'value' filed")?,
+                ),
+                path,
+            }),
             _ => Err(format!("Unsupport op '{}'", self.op)),
         }
     }
@@ -105,6 +118,7 @@ pub enum Patch {
     Replace(Value),
     Move { from: Path },
     Copy { from: Path },
+    Test(Value),
 }
 
 #[derive(Debug)]
@@ -125,8 +139,41 @@ impl TryFrom<&str> for PatchElem {
     }
 }
 
+impl TryFrom<String> for PatchElem {
+    type Error = String;
+
+    fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
+        PatchElem::try_from(value.as_ref())
+    }
+}
+
 pub struct JsonPatch {
     patches: Vec<PatchElem>,
+}
+
+impl TryFrom<&str> for JsonPatch {
+    type Error = String;
+
+    fn try_from(s: &str) -> std::result::Result<Self, Self::Error> {
+        let ops_res: std::result::Result<Vec<Operation>, _> = serde_json::from_str(s);
+        match ops_res {
+            Ok(ops) => {
+                let res: std::result::Result<Vec<PatchElem>, _> =
+                    ops.into_iter().map(|op| op.try_into()).collect();
+                let patches = res?;
+                Ok(JsonPatch { patches })
+            }
+            Err(e) => Err(e.to_string()),
+        }
+    }
+}
+
+impl TryFrom<String> for JsonPatch {
+    type Error = String;
+
+    fn try_from(s: String) -> std::result::Result<Self, Self::Error> {
+        JsonPatch::try_from(s.as_ref())
+    }
 }
 
 impl PatchElem {
@@ -156,7 +203,19 @@ impl PatchElem {
                 add_json(&mut clone_json, &mut self.path.clone(), &target)?;
                 Ok(clone_json)
             }
-            _ => todo!(),
+            Patch::Test(v) => {
+                let target = retrieve_json(&json, &self.path)?;
+                if v != target {
+                    return Err(Error {
+                        err: Box::new(ErrorCode::TestFail {
+                            path: self.path.clone(),
+                            expected: v.clone(),
+                            actual: target.clone(),
+                        }),
+                    });
+                }
+                Ok(clone_json)
+            }
         }
     }
 }
@@ -178,11 +237,19 @@ pub struct Error {
 
 #[derive(Debug)]
 pub(crate) enum ErrorCode {
-    IndexOutOfRange { index: usize, len: usize },
+    IndexOutOfRange {
+        index: usize,
+        len: usize,
+    },
     ParentNodeNotExist,
     TokenIsNotAnArray,
     TokenIsNotAnObject,
     PathNotExist,
+    TestFail {
+        path: Path,
+        expected: Value,
+        actual: Value,
+    },
 }
 
 pub type Result<T> = result::Result<T, Error>;
@@ -686,6 +753,14 @@ mod tests {
         Ok(())
     }
 
+    fn test_json_patch_arr(json: &str, patches_str: &str, expected_json_str: &str) -> Result<()> {
+        let jp: JsonPatch = JsonPatch::try_from(patches_str).unwrap();
+        let res = jp.apply(&serde_json::from_str(json)?).unwrap();
+        let expected: Value = serde_json::from_str(expected_json_str)?;
+        assert_eq!(res, expected);
+        Ok(())
+    }
+
     #[test]
     fn move_a_value() -> Result<()> {
         let data = r#"
@@ -758,6 +833,22 @@ mod tests {
         let patch_str = r#"{ "op": "copy", "from": "/foo/1", "path": "/foo/3" }"#;
         let expected_str = r#"{ "foo": [ "all", "grass", "cows", "grass", "eat" ] }"#;
         test_json_patch(data, patch_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_a_value_success() -> Result<()> {
+        let data = r#"
+           {
+                "baz": "qux",
+                "foo": [ "a", 2, "c" ]
+           }"#;
+        let patches_str = r#"
+            [
+                { "op": "test", "path": "/baz", "value": "qux" },
+                { "op": "test", "path": "/foo/1", "value": 2 }
+            ]"#;
+        test_json_patch_arr(data, patches_str, data)?;
         Ok(())
     }
 }
