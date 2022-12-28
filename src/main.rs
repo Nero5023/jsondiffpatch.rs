@@ -1,10 +1,10 @@
+use anyhow::Result;
 use clap::Parser;
 use console::Style;
 use json_diff_patch::DiffChange;
 use json_diff_patch::JsonDiff;
 use json_diff_patch::Path;
-use json_diff_patch::PathElem;
-use serde_json::{Result, Value};
+use serde_json::Value;
 use std::fs;
 use std::process;
 use std::unreachable;
@@ -233,7 +233,7 @@ fn read_json_file(path: &str) -> String {
     let res = fs::read_to_string(path);
     match res {
         Ok(content) => {
-            let json: Result<Value> = serde_json::from_str(&content);
+            let json: serde_json::Result<Value> = serde_json::from_str(&content);
             if let Err(err) = json {
                 println!("Json `{}` parse error: {}", path, err);
                 process::exit(1);

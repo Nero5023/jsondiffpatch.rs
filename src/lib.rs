@@ -1,28 +1,28 @@
 mod lcs;
 mod patch;
 
+use anyhow::{anyhow, Result};
 use core::result;
 use serde_json::map::Map;
-use serde_json::{Result, Value};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::convert::From;
+use std::convert::TryFrom;
 use std::error::Error;
-use std::fmt::{Display, format};
+use std::fmt::{format, Display};
 use std::fs::File;
 use std::io::BufReader;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::string::ToString;
-use std::convert::From;
-use std::convert::TryFrom;
-use anyhow::anyhow;
 
 fn read_json_str(s: &str) -> Result<Value> {
     let v: Value = serde_json::from_str(s)?;
     Ok(v)
 }
 
-fn read_json_file<P: AsRef<std::path::Path>>(path: P) -> result::Result<Value, Box<dyn Error>> {
+fn read_json_file<P: AsRef<std::path::Path>>(path: P) -> Result<Value> {
     let f = File::open(path)?;
     let reader = BufReader::new(f);
     let v = serde_json::from_reader(reader)?;
@@ -77,7 +77,12 @@ impl TryFrom<&str> for Path {
         if !s.starts_with("/") {
             return Err(anyhow!("path '{}' should start with '/'", s));
         }
-        let elems = s.split("/").into_iter().skip(1).map(|elem| elem.into()).collect::<Vec<PathElem>>();
+        let elems = s
+            .split("/")
+            .into_iter()
+            .skip(1)
+            .map(|elem| elem.into())
+            .collect::<Vec<PathElem>>();
         Ok(Path(elems))
     }
 }
