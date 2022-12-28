@@ -490,12 +490,15 @@ fn retrieve_json<'a>(json: &'a Value, path: &Path) -> Result<&'a Value> {
 mod tests {
 
     use super::JsonPatch;
+    use super::JsonPatchError;
     use super::Patch;
     use super::PatchElem;
     use super::Path;
     use super::PathElem;
+    use anyhow::anyhow;
+    use anyhow::Result;
     use serde_json::json;
-    use serde_json::{Result, Value};
+    use serde_json::Value;
 
     #[test]
     fn add_simple_key() -> Result<()> {
@@ -808,19 +811,19 @@ mod tests {
     }
 
     fn test_json_patch(json: &str, patch_str: &str, expected_json_str: &str) -> Result<()> {
-        let patch: PatchElem = PatchElem::try_from(patch_str).unwrap();
+        let patch: PatchElem = PatchElem::try_from(patch_str)?;
         let jp = JsonPatch {
             patches: vec![patch],
         };
-        let res = jp.apply(&serde_json::from_str(json)?).unwrap();
+        let res = jp.apply(&serde_json::from_str(json)?)?;
         let expected: Value = serde_json::from_str(expected_json_str)?;
         assert_eq!(res, expected);
         Ok(())
     }
 
     fn test_json_patch_arr(json: &str, patches_str: &str, expected_json_str: &str) -> Result<()> {
-        let jp: JsonPatch = JsonPatch::try_from(patches_str).unwrap();
-        let res = jp.apply(&serde_json::from_str(json)?).unwrap();
+        let jp: JsonPatch = JsonPatch::try_from(patches_str)?;
+        let res = jp.apply(&serde_json::from_str(json)?)?;
         let expected: Value = serde_json::from_str(expected_json_str)?;
         assert_eq!(res, expected);
         Ok(())
@@ -917,18 +920,36 @@ mod tests {
         Ok(())
     }
 
-    // TODO: add a value test error, after change error
-    // #[test]
-    // fn test_a_value_error() -> Result<()> {
-    //     let data = r#"{ "baz": "qux" }"#;
-    //     let patches_str = r#"
-    //         [
-    //             { "op": "test", "path": "/baz", "value": "bar" }
-    //         ]
-    //         "#;
-    //     test_json_patch_arr(data, patches_str, data);
-    //     Ok(())
-    // }
+    #[test]
+    fn test_a_value_error() -> Result<()> {
+        let data = r#"{ "baz": "qux" }"#;
+        let patches_str = r#"
+            [
+                { "op": "test", "path": "/baz", "value": "bar" }
+            ]
+            "#;
+        match test_json_patch_arr(data, patches_str, data) {
+            Ok(_) => Err(anyhow!("not get test error")),
+            Err(e) => match e.downcast_ref::<JsonPatchError>() {
+                Some(JsonPatchError::TestFail {
+                    path,
+                    expected,
+                    actual,
+                }) => {
+                    if path.to_string() == "/baz"
+                        && expected.to_string() == "\"bar\""
+                        && actual.to_string() == "\"qux\""
+                    {
+                        Ok(())
+                    } else {
+                        Err(anyhow!("Wrong test fail error: {}", e))
+                    }
+                }
+                None => Err(anyhow!("Not get JsonPatchError, get {}", e)),
+                _ => Err(anyhow!("Get the wrong JsonPatchError {}", e)),
+            },
+        }
+    }
 
     #[test]
     fn ignore_unrecognized_elements() -> Result<()> {
