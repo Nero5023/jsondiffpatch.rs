@@ -34,7 +34,9 @@ impl JsonPointer {
                                     return Err(anyhow!("index out of range"));
                                 }
                             }
-                            TokenIndex::IndexAfterLastElem => todo!(),
+                            TokenIndex::IndexAfterLastElem => {
+                                return Err(anyhow!("index out of range"));
+                            },
                         }
                     } else {
                         return Err(anyhow!("not a valid digit index"));
