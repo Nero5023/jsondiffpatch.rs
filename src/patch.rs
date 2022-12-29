@@ -968,4 +968,22 @@ mod tests {
         test_json_patch_arr(data, patch_str, expected_str)?;
         Ok(())
     }
+
+    #[test]
+    fn add_to_nonexistent_target()->Result<()>{
+        let data = r#"{ "foo": "bar" }"#;
+        let patch_str = r#"
+           [
+                { "op": "add", "path": "/baz/bat", "value": "qux" }
+           ]
+        "#;
+        match test_json_patch(data,patch_str,data){
+            Ok(_) => Err(anyhow!("not get test error")),
+            Err(e) => match e.downcast_ref::<JsonPatchError>() {
+                Some(JsonPatchError::ParentNodeNotExist) => Ok(()),
+                None => Err(anyhow!("Not get JsonPatchError, get {}", e)),
+                _ => Err(anyhow!("Get the wrong JsonPatchError {}", e)),
+            },
+        }
+    }
 }
