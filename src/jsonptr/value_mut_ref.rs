@@ -16,6 +16,9 @@ pub enum ValueMutRef<'a> {
 }
 
 impl<'a> ValueMutRef<'a> {
+    // set/add/replace/delete use self, take the onwership here, the reason here is that because it
+    // will change the mut reference, if use &self, it can still operate mut operations, it will
+    // make some confuse
     pub fn set(self, val: Value) -> Result<()> {
         match self {
             ValueMutRef::ArrayElem { parent, idx } => match idx {
