@@ -40,7 +40,10 @@ impl<'a> ValueMutRef<'a> {
                             Err(anyhow!("Index out of range"))
                         }
                     },
-                    TokenIndex::IndexAfterLastElem => Err(anyhow!("Index out of range"))
+                    TokenIndex::IndexAfterLastElem => {
+                        parent.push(val);
+                        Ok(())
+                    }
                 }
             },
             ValueMutRef::ObjElem { parent, key } => {
@@ -67,7 +70,7 @@ impl<'a> ValueMutRef<'a> {
                         }
                     },
                     TokenIndex::IndexAfterLastElem => {
-                        parent.insert(parent.len(), val);
+                        parent.push(val);
                         Ok(())
                     },
                 }
