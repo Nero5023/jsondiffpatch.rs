@@ -88,10 +88,46 @@ impl<'a> ValueMutRef<'a> {
                     parent[&key] = val;
                     Ok(())
                 } else {
-                    Err(anyhow!("key {} not exist val {}", key, val))
+                    Err(anyhow!("key {} not exist", key))
                 }
             },
             _ => self.set(val)
+        }
+    }
+
+    fn delete(self) -> Result<()> {
+        match self {
+            ValueMutRef::ArrayElem { parent, idx } => {
+                match idx {
+                    TokenIndex::Index(idx) => {
+                        if idx < parent.len() {
+                            parent.remove(idx);
+                            Ok(())
+                        } else {                            
+                            Err(anyhow!("Index out of range"))
+                        }
+                    },
+                    TokenIndex::IndexAfterLastElem => {
+                        if parent.len() != 0 {
+                            parent.pop();
+                        }
+                        // TODO: do not know if arr is empty what todo, the current logic means
+                        // delete last element of array, if not have last element just ignore.
+                        Ok(())
+                    },
+                }
+            }, 
+            ValueMutRef::ObjElem { parent, key } => {
+                if parent.contains_key(&key) {
+                    parent.remove(&key);
+                    Ok(())
+                } else {
+                    Err(anyhow!("key {} not exist", key))
+                }
+            },
+            ValueMutRef::Root(_) => {
+                Err(anyhow!("Cannot delete root"))
+            }
         }
     }
 }
