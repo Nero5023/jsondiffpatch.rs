@@ -80,6 +80,20 @@ impl<'a> ValueMutRef<'a> {
             }
         }
     }
+
+    fn replace(self, val: Value) -> Result<()> {
+        match self {
+            ValueMutRef::ObjElem { parent, key } => {
+                if parent.contains_key(&key) {
+                    parent[&key] = val;
+                    Ok(())
+                } else {
+                    Err(anyhow!("key {} not exist val {}", key, val))
+                }
+            },
+            _ => self.set(val)
+        }
+    }
 }
 
 impl JsonPointer {
