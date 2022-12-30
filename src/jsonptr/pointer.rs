@@ -4,6 +4,7 @@ use anyhow::{anyhow, Result};
 use serde_json::Value;
 use std::ops::Deref;
 
+#[derive(Debug, Clone)]
 pub struct JsonPointer {
     tokens: Vec<Token>,
 }
@@ -17,7 +18,7 @@ impl Deref for JsonPointer {
 }
 
 impl JsonPointer {
-    pub fn get(self, val: &Value) -> Result<&Value> {
+    pub fn get<'a>(&self, val: &'a Value) -> Result<&'a Value> {
         let mut cur_ref = val;
         for token in self.iter() {
             match cur_ref {
@@ -53,7 +54,7 @@ impl JsonPointer {
         Ok(cur_ref)
     }
 
-    pub fn get_mut(self, val: &mut Value) -> Result<ValueMutRef> {
+    pub fn get_mut<'a>(&self, val: &'a mut Value) -> Result<ValueMutRef<'a>> {
         if self.len() == 0 {
             return Ok(ValueMutRef::Root(val));
         }
@@ -104,6 +105,18 @@ impl JsonPointer {
             }),
             _ => Err(anyhow!("Not an array or an object")),
         }
+    }
+
+    pub fn to_escaped_string(&self) -> String {
+        let path_token_strs: Vec<String> = self
+            .tokens
+            .iter()
+            .map(|token| token.to_escaped_string())
+            .collect();
+        if path_token_strs.len() == 0 {
+            return String::from("");
+        }
+        format!("/{}", path_token_strs.join("/"))
     }
 }
 

@@ -1,3 +1,4 @@
+#[derive(Debug, Clone)]
 pub struct Token {
     val: String,
 }
@@ -34,11 +35,14 @@ impl Token {
     /// occurrence of the sequence '~1' to '/', and then transforming any
     /// occurrence of the sequence '~0' to '~'
     ///
-    /// the string '~01' correctly becomes '~1' after transformation
-    /// ```
-    /// let res = JsonPointer::unescape("~01");
-    /// assert_eq!(res, "~1".to_string());
-    /// ```
+    //the string '~01' correctly becomes '~1' after transformation
+    // TODO: do not know why user super::Token not work for doc test here
+    // to enable test, use /// instead // for following comments.
+    // ```
+    // use super::Token;
+    // let res = Token::unescape("~01");
+    // assert_eq!(res, "~1".to_string());
+    // ```
     fn unescape(s: &str) -> String {
         s.replace("~1", "/").replace("~0", "~")
     }
@@ -51,6 +55,10 @@ impl Token {
         Token {
             val: Self::unescape(s),
         }
+    }
+
+    pub fn to_escaped_string(&self) -> String {
+        Self::unescape(&self.val).to_string()
     }
 }
 

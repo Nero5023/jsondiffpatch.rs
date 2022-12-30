@@ -36,7 +36,7 @@ impl<'a> ValueMutRef<'a> {
                 }
             },
             ValueMutRef::ObjElem { parent, key } => {
-                parent[&key] = val;
+                parent.insert(key, val);
                 Ok(())
             }
             ValueMutRef::Root(root) => {
@@ -80,32 +80,32 @@ impl<'a> ValueMutRef<'a> {
         }
     }
 
-    pub fn delete(self) -> Result<()> {
+    pub fn delete(self) -> Result<Value> {
         match self {
             ValueMutRef::ArrayElem { parent, idx } => {
                 match idx {
                     TokenIndex::Index(idx) => {
                         if idx < parent.len() {
-                            parent.remove(idx);
-                            Ok(())
+                            let v = parent.remove(idx);
+                            Ok(v)
                         } else {
                             Err(anyhow!("Index out of range"))
                         }
                     }
                     TokenIndex::IndexAfterLastElem => {
                         if parent.len() != 0 {
-                            parent.pop();
+                            Ok(parent.pop().unwrap())
+                        } else {
+                            // TODO: do not know if arr is empty what todo, maybe need raise error here
+                            todo!()
                         }
-                        // TODO: do not know if arr is empty what todo, the current logic means
-                        // delete last element of array, if not have last element just ignore.
-                        Ok(())
                     }
                 }
             }
             ValueMutRef::ObjElem { parent, key } => {
                 if parent.contains_key(&key) {
-                    parent.remove(&key);
-                    Ok(())
+                    let v = parent.remove(&key).unwrap();
+                    Ok(v)
                 } else {
                     Err(anyhow!("key {} not exist", key))
                 }
