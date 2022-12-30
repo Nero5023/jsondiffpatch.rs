@@ -1,7 +1,6 @@
-use serde_json::{Map, Value};
-use anyhow::{Result, anyhow};
 use super::token::TokenIndex;
-
+use anyhow::{anyhow, Result};
+use serde_json::{Map, Value};
 
 pub enum ValueMutRef<'a> {
     ArrayElem {
@@ -114,15 +113,11 @@ impl<'a> ValueMutRef<'a> {
 
     pub fn get(&self) -> Option<&Value> {
         match self {
-            ValueMutRef::ArrayElem { parent, idx } => {
-                match idx {
-                    TokenIndex::Index(idx) => parent.get(*idx),
-                    TokenIndex::IndexAfterLastElem => None,
-                }
+            ValueMutRef::ArrayElem { parent, idx } => match idx {
+                TokenIndex::Index(idx) => parent.get(*idx),
+                TokenIndex::IndexAfterLastElem => None,
             },
-            ValueMutRef::ObjElem { parent, key } => {
-                parent.get(key)
-            },
+            ValueMutRef::ObjElem { parent, key } => parent.get(key),
             ValueMutRef::Root(val) => Some(val),
         }
     }

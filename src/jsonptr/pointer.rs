@@ -1,8 +1,8 @@
-use std::ops::Deref;
+use super::token::{Token, TokenIndex};
 use super::value_mut_ref::ValueMutRef;
 use anyhow::{anyhow, Result};
 use serde_json::Value;
-use super::token::{TokenIndex, Token};
+use std::ops::Deref;
 
 struct JsonPointer {
     tokens: Vec<Token>,
@@ -106,4 +106,3 @@ impl JsonPointer {
         }
     }
 }
-

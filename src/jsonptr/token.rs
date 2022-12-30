@@ -1,4 +1,3 @@
-
 pub struct Token {
     val: String,
 }
