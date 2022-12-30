@@ -17,7 +17,7 @@ pub enum ValueMutRef<'a> {
 }
 
 impl<'a> ValueMutRef<'a> {
-    fn set(self, val: Value) -> Result<()> {
+    pub fn set(self, val: Value) -> Result<()> {
         match self {
             ValueMutRef::ArrayElem { parent, idx } => match idx {
                 TokenIndex::Index(idx) => {
@@ -44,7 +44,7 @@ impl<'a> ValueMutRef<'a> {
         }
     }
 
-    fn add(self, val: Value) -> Result<()> {
+    pub fn add(self, val: Value) -> Result<()> {
         match self {
             ValueMutRef::ArrayElem { parent, idx } => match idx {
                 TokenIndex::Index(idx) => {
@@ -64,7 +64,7 @@ impl<'a> ValueMutRef<'a> {
         }
     }
 
-    fn replace(self, val: Value) -> Result<()> {
+    pub fn replace(self, val: Value) -> Result<()> {
         match self {
             ValueMutRef::ObjElem { parent, key } => {
                 if parent.contains_key(&key) {
@@ -78,7 +78,7 @@ impl<'a> ValueMutRef<'a> {
         }
     }
 
-    fn delete(self) -> Result<()> {
+    pub fn delete(self) -> Result<()> {
         match self {
             ValueMutRef::ArrayElem { parent, idx } => {
                 match idx {
@@ -112,7 +112,7 @@ impl<'a> ValueMutRef<'a> {
         }
     }
 
-    fn get(&self) -> Option<&Value> {
+    pub fn get(&self) -> Option<&Value> {
         match self {
             ValueMutRef::ArrayElem { parent, idx } => {
                 match idx {

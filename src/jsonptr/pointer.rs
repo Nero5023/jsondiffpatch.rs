@@ -17,7 +17,7 @@ impl Deref for JsonPointer {
 }
 
 impl JsonPointer {
-    fn get(self, val: &Value) -> Result<&Value> {
+    pub fn get(self, val: &Value) -> Result<&Value> {
         let mut cur_ref = val;
         for token in self.iter() {
             match cur_ref {
@@ -53,7 +53,7 @@ impl JsonPointer {
         Ok(cur_ref)
     }
 
-    fn get_mut(self, val: &mut Value) -> Result<ValueMutRef> {
+    pub fn get_mut(self, val: &mut Value) -> Result<ValueMutRef> {
         if self.len() == 0 {
             return Ok(ValueMutRef::Root(val));
         }
