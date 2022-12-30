@@ -128,6 +128,21 @@ impl<'a> ValueMutRef<'a> {
             ValueMutRef::Root(_) => Err(anyhow!("Cannot delete root")),
         }
     }
+
+    fn get(&self) -> Option<&Value> {
+        match self {
+            ValueMutRef::ArrayElem { parent, idx } => {
+                match idx {
+                    TokenIndex::Index(idx) => parent.get(*idx),
+                    TokenIndex::IndexAfterLastElem => None,
+                }
+            },
+            ValueMutRef::ObjElem { parent, key } => {
+                parent.get(key)
+            },
+            ValueMutRef::Root(val) => Some(val),
+        }
+    }
 }
 
 impl JsonPointer {
