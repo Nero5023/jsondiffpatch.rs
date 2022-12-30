@@ -1,4 +1,5 @@
-use std::{ops::Deref, thread::current};
+use std::ops::Deref;
+use serde_json::Map;
 
 use anyhow::{anyhow, Result};
 use serde_json::Value;
@@ -16,6 +17,41 @@ impl Deref for JsonPointer {
 
     fn deref(&self) -> &Self::Target {
         &self.tokens
+    }
+}
+
+enum ValueMutRef<'a> {
+    ArrayElem { parent: &'a mut Vec<Value>, idx: TokenIndex  },
+    // TODO: check if 'a for key is correct
+    ObjElem { parent:  &'a mut Map<String, Value>, key: String },
+    Root(&'a mut Value),
+}
+
+impl<'a> ValueMutRef<'a> {
+    fn set(self, val: Value) -> Result<()> {
+        match self {
+            ValueMutRef::ArrayElem { parent, idx } => {
+                match idx {
+                    TokenIndex::Index(idx) =>{
+                        if idx < parent.len() {
+                            parent[idx] = val;
+                            Ok(())
+                        } else {
+                            Err(anyhow!("Index out of range"))
+                        }
+                    },
+                    TokenIndex::IndexAfterLastElem => Err(anyhow!("Index out of range"))
+                }
+            },
+            ValueMutRef::ObjElem { parent, key } => {
+                parent[&key] = val;
+                Ok(())
+            },
+            ValueMutRef::Root(root) => {
+                *root = val;
+                Ok(())
+            },
+        }
     }
 }
 
@@ -56,9 +92,14 @@ impl JsonPointer {
         Ok(cur_ref)
     }
 
-    fn get_mut(self, val: &mut Value) -> Result<&mut Value> {
+    fn get_mut(self, val: &mut Value) -> Result<ValueMutRef> {
+        if self.len() == 0 {
+            return Ok(ValueMutRef::Root(val));
+        }
+        
         let mut cur_ref = val;
-        for token in self.iter() {
+        // iteral whole path excpet last one
+        for token in &self[0..self.len()-1] {
             match cur_ref {
                 Value::Array(arr) => {
                     if let Some(token_index) = token.as_index() {
@@ -87,7 +128,13 @@ impl JsonPointer {
                 _ => return Err(anyhow!("Not an array or an object")),
             }
         }
-        Ok(cur_ref)
+        // will always not fail, because check the len first;
+        let last_token = self.last().unwrap();
+        match cur_ref {
+            Value::Array(arr) => Ok(ValueMutRef::ArrayElem { parent: arr, idx: last_token.as_index().ok_or(anyhow!("not a valid digit index"))? }),
+            Value::Object(obj) => Ok(ValueMutRef::ObjElem { parent: obj, key: last_token.as_key().to_string() }),
+            _ => Err(anyhow!("Not an array or an object")),
+        }
     }
 }
 
