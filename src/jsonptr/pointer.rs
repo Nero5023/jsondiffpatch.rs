@@ -53,6 +53,30 @@ impl<'a> ValueMutRef<'a> {
             },
         }
     }
+
+    fn add(self, val: Value) -> Result<()> {
+        match self {
+            ValueMutRef::ArrayElem { parent, idx } => {
+                match idx {
+                    TokenIndex::Index(idx) => {
+                        if idx <= parent.len() {
+                            parent.insert(idx, val);
+                            Ok(())
+                        } else {
+                            Err(anyhow!("Index out of range"))
+                        }
+                    },
+                    TokenIndex::IndexAfterLastElem => {
+                        parent.insert(parent.len(), val);
+                        Ok(())
+                    },
+                }
+            },
+            _ => {
+                self.set(val)
+            }
+        }
+    }
 }
 
 impl JsonPointer {
