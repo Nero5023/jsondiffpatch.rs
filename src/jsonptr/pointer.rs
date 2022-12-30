@@ -106,3 +106,42 @@ impl JsonPointer {
         }
     }
 }
+
+impl JsonPointer {
+    fn parse(s: &str) -> Result<Self> {
+        if s == "" {
+            // Empty tokens
+            return Ok(JsonPointer { tokens: vec![] });
+        }
+        if !s.starts_with('/') {
+            return Err(anyhow!("Path is not start with '/'"));
+        }
+        let tokens = s
+            .split('/')
+            .skip(1) // skip for first leaing empty elem
+            .map(|s| Token::new(s))
+            .collect::<Vec<Token>>();
+
+        Ok(JsonPointer { tokens })
+    }
+
+    pub fn new(s: &str) -> Result<Self> {
+        Self::parse(s)
+    }
+}
+
+impl TryFrom<&str> for JsonPointer {
+    type Error = anyhow::Error;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        JsonPointer::new(s)
+    }
+}
+
+impl TryFrom<String> for JsonPointer {
+    type Error = anyhow::Error;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        TryFrom::try_from(s.as_ref())
+    }
+}
