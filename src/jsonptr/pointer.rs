@@ -3,13 +3,10 @@ use std::ops::Deref;
 
 use anyhow::{anyhow, Result};
 use serde_json::Value;
+use super::token::{TokenIndex, Token};
 
 struct JsonPointer {
     tokens: Vec<Token>,
-}
-
-struct Token {
-    val: String,
 }
 
 impl Deref for JsonPointer {
@@ -236,31 +233,3 @@ impl JsonPointer {
     }
 }
 
-enum TokenIndex {
-    Index(usize),
-    IndexAfterLastElem,
-}
-
-impl Token {
-    fn as_key(&self) -> &str {
-        &self.val
-    }
-
-    // TODO: maybe use Result for this, and use self defined error
-    fn as_index(&self) -> Option<TokenIndex> {
-        if self.val == "-" {
-            return Some(TokenIndex::IndexAfterLastElem);
-        }
-        if self.val.len() != 1 {
-            if self.val.trim_start_matches('0').len() != self.val.len() {
-                // Leading zero
-                return None;
-            }
-        }
-        if let Ok(index) = self.val.parse::<usize>() {
-            Some(TokenIndex::Index(index))
-        } else {
-            None
-        }
-    }
-}
