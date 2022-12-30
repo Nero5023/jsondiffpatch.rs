@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use serde_json::Value;
 use std::ops::Deref;
 
-struct JsonPointer {
+pub struct JsonPointer {
     tokens: Vec<Token>,
 }
 
