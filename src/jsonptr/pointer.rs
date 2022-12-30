@@ -1,5 +1,5 @@
-use std::ops::Deref;
 use serde_json::Map;
+use std::ops::Deref;
 
 use anyhow::{anyhow, Result};
 use serde_json::Value;
@@ -21,63 +21,63 @@ impl Deref for JsonPointer {
 }
 
 enum ValueMutRef<'a> {
-    ArrayElem { parent: &'a mut Vec<Value>, idx: TokenIndex  },
+    ArrayElem {
+        parent: &'a mut Vec<Value>,
+        idx: TokenIndex,
+    },
     // TODO: check if 'a for key is correct
-    ObjElem { parent:  &'a mut Map<String, Value>, key: String },
+    ObjElem {
+        parent: &'a mut Map<String, Value>,
+        key: String,
+    },
     Root(&'a mut Value),
 }
 
 impl<'a> ValueMutRef<'a> {
     fn set(self, val: Value) -> Result<()> {
         match self {
-            ValueMutRef::ArrayElem { parent, idx } => {
-                match idx {
-                    TokenIndex::Index(idx) =>{
-                        if idx < parent.len() {
-                            parent[idx] = val;
-                            Ok(())
-                        } else {
-                            Err(anyhow!("Index out of range"))
-                        }
-                    },
-                    TokenIndex::IndexAfterLastElem => {
-                        parent.push(val);
+            ValueMutRef::ArrayElem { parent, idx } => match idx {
+                TokenIndex::Index(idx) => {
+                    if idx < parent.len() {
+                        parent[idx] = val;
                         Ok(())
+                    } else {
+                        Err(anyhow!("Index out of range"))
                     }
+                }
+                TokenIndex::IndexAfterLastElem => {
+                    parent.push(val);
+                    Ok(())
                 }
             },
             ValueMutRef::ObjElem { parent, key } => {
                 parent[&key] = val;
                 Ok(())
-            },
+            }
             ValueMutRef::Root(root) => {
                 *root = val;
                 Ok(())
-            },
+            }
         }
     }
 
     fn add(self, val: Value) -> Result<()> {
         match self {
-            ValueMutRef::ArrayElem { parent, idx } => {
-                match idx {
-                    TokenIndex::Index(idx) => {
-                        if idx <= parent.len() {
-                            parent.insert(idx, val);
-                            Ok(())
-                        } else {
-                            Err(anyhow!("Index out of range"))
-                        }
-                    },
-                    TokenIndex::IndexAfterLastElem => {
-                        parent.push(val);
+            ValueMutRef::ArrayElem { parent, idx } => match idx {
+                TokenIndex::Index(idx) => {
+                    if idx <= parent.len() {
+                        parent.insert(idx, val);
                         Ok(())
-                    },
+                    } else {
+                        Err(anyhow!("Index out of range"))
+                    }
+                }
+                TokenIndex::IndexAfterLastElem => {
+                    parent.push(val);
+                    Ok(())
                 }
             },
-            _ => {
-                self.set(val)
-            }
+            _ => self.set(val),
         }
     }
 
@@ -90,8 +90,8 @@ impl<'a> ValueMutRef<'a> {
                 } else {
                     Err(anyhow!("key {} not exist", key))
                 }
-            },
-            _ => self.set(val)
+            }
+            _ => self.set(val),
         }
     }
 
@@ -103,10 +103,10 @@ impl<'a> ValueMutRef<'a> {
                         if idx < parent.len() {
                             parent.remove(idx);
                             Ok(())
-                        } else {                            
+                        } else {
                             Err(anyhow!("Index out of range"))
                         }
-                    },
+                    }
                     TokenIndex::IndexAfterLastElem => {
                         if parent.len() != 0 {
                             parent.pop();
@@ -114,9 +114,9 @@ impl<'a> ValueMutRef<'a> {
                         // TODO: do not know if arr is empty what todo, the current logic means
                         // delete last element of array, if not have last element just ignore.
                         Ok(())
-                    },
+                    }
                 }
-            }, 
+            }
             ValueMutRef::ObjElem { parent, key } => {
                 if parent.contains_key(&key) {
                     parent.remove(&key);
@@ -124,10 +124,8 @@ impl<'a> ValueMutRef<'a> {
                 } else {
                     Err(anyhow!("key {} not exist", key))
                 }
-            },
-            ValueMutRef::Root(_) => {
-                Err(anyhow!("Cannot delete root"))
             }
+            ValueMutRef::Root(_) => Err(anyhow!("Cannot delete root")),
         }
     }
 }
@@ -149,7 +147,7 @@ impl JsonPointer {
                             }
                             TokenIndex::IndexAfterLastElem => {
                                 return Err(anyhow!("index out of range"));
-                            },
+                            }
                         }
                     } else {
                         return Err(anyhow!("not a valid digit index"));
@@ -173,10 +171,10 @@ impl JsonPointer {
         if self.len() == 0 {
             return Ok(ValueMutRef::Root(val));
         }
-        
+
         let mut cur_ref = val;
         // iteral whole path excpet last one
-        for token in &self[0..self.len()-1] {
+        for token in &self[0..self.len() - 1] {
             match cur_ref {
                 Value::Array(arr) => {
                     if let Some(token_index) = token.as_index() {
@@ -208,8 +206,16 @@ impl JsonPointer {
         // will always not fail, because check the len first;
         let last_token = self.last().unwrap();
         match cur_ref {
-            Value::Array(arr) => Ok(ValueMutRef::ArrayElem { parent: arr, idx: last_token.as_index().ok_or(anyhow!("not a valid digit index"))? }),
-            Value::Object(obj) => Ok(ValueMutRef::ObjElem { parent: obj, key: last_token.as_key().to_string() }),
+            Value::Array(arr) => Ok(ValueMutRef::ArrayElem {
+                parent: arr,
+                idx: last_token
+                    .as_index()
+                    .ok_or(anyhow!("not a valid digit index"))?,
+            }),
+            Value::Object(obj) => Ok(ValueMutRef::ObjElem {
+                parent: obj,
+                key: last_token.as_key().to_string(),
+            }),
             _ => Err(anyhow!("Not an array or an object")),
         }
     }
