@@ -1,5 +1,5 @@
 mod lcs;
-mod patch;
+pub mod patch;
 
 use anyhow::{anyhow, Result};
 use core::result;
