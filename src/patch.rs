@@ -1,10 +1,13 @@
-use crate::{Path, PathElem};
+// use crate::{Path, PathElem};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::convert::TryFrom;
 use thiserror::Error;
 // TODO: maybe use thiserror Result<T, JsonPatchError>
 use anyhow::{anyhow, Result};
+
+use crate::jsonptr::operate_by_jsonptr::*;
+use crate::jsonptr::pointer::JsonPointer;
 
 #[derive(Serialize, Deserialize)]
 struct Operation {
@@ -16,41 +19,41 @@ struct Operation {
 
 impl From<PatchElem> for Operation {
     fn from(patch_elem: PatchElem) -> Self {
-        let path = patch_elem.path;
+        let ptr = patch_elem.json_ptr;
         match patch_elem.patch {
             Patch::Add(val) => Operation {
                 op: "add".to_owned(),
-                path: path.to_string(),
+                path: ptr.to_escaped_string(),
                 value: Some(val),
                 from: None,
             },
             Patch::Remove => Operation {
                 op: "remove".to_owned(),
-                path: path.to_string(),
+                path: ptr.to_escaped_string(),
                 value: None,
                 from: None,
             },
             Patch::Replace(val) => Operation {
                 op: "move".to_string(),
-                path: path.to_string(),
+                path: ptr.to_escaped_string(),
                 value: Some(val),
                 from: None,
             },
             Patch::Move { from } => Operation {
                 op: "from".to_string(),
-                path: path.to_string(),
+                path: ptr.to_escaped_string(),
                 value: None,
-                from: Some(from.to_string()),
+                from: Some(from.to_escaped_string()),
             },
             Patch::Copy { from } => Operation {
                 op: "from".to_string(),
-                path: path.to_string(),
+                path: ptr.to_escaped_string(),
                 value: None,
-                from: Some(from.to_string()),
+                from: Some(from.to_escaped_string()),
             },
             Patch::Test(val) => Operation {
                 op: "test".to_string(),
-                path: path.to_string(),
+                path: ptr.to_escaped_string(),
                 value: Some(val),
                 from: None,
             },
@@ -62,25 +65,25 @@ impl TryInto<PatchElem> for Operation {
     type Error = anyhow::Error;
 
     fn try_into(self) -> std::result::Result<PatchElem, Self::Error> {
-        let path = Path::try_from(self.path)?;
+        let json_ptr = JsonPointer::try_from(self.path)?;
         match self.op.as_str() {
             "add" => Ok(PatchElem {
                 patch: Patch::Add(
                     self.value
                         .ok_or(anyhow!("add operaton does not have 'value' field"))?,
                 ),
-                path,
+                json_ptr,
             }),
             "remove" => Ok(PatchElem {
                 patch: Patch::Remove,
-                path,
+                json_ptr,
             }),
             "replace" => Ok(PatchElem {
                 patch: Patch::Replace(
                     self.value
                         .ok_or(anyhow!("replace operation does not have 'value' field"))?,
                 ),
-                path,
+                json_ptr,
             }),
             "move" => Ok(PatchElem {
                 patch: Patch::Move {
@@ -89,7 +92,7 @@ impl TryInto<PatchElem> for Operation {
                         .ok_or(anyhow!("move operation does not have 'from' field"))?
                         .try_into()?,
                 },
-                path,
+                json_ptr,
             }),
             "copy" => Ok(PatchElem {
                 patch: Patch::Copy {
@@ -98,14 +101,14 @@ impl TryInto<PatchElem> for Operation {
                         .ok_or(anyhow!("copy operation does not have 'from' field"))?
                         .try_into()?,
                 },
-                path,
+                json_ptr,
             }),
             "test" => Ok(PatchElem {
                 patch: Patch::Test(
                     self.value
                         .ok_or(anyhow!("test operation does not have 'value' filed"))?,
                 ),
-                path,
+                json_ptr,
             }),
             _ => Err(anyhow!("Unsupport op '{}'", self.op)),
         }
@@ -117,15 +120,15 @@ pub enum Patch {
     Add(Value),
     Remove,
     Replace(Value),
-    Move { from: Path },
-    Copy { from: Path },
+    Move { from: JsonPointer },
+    Copy { from: JsonPointer },
     Test(Value),
 }
 
 #[derive(Debug)]
 pub struct PatchElem {
-    pub patch: Patch,
-    pub path: Path,
+    patch: Patch,
+    json_ptr: JsonPointer,
 }
 
 impl TryFrom<&str> for PatchElem {
@@ -149,7 +152,7 @@ impl TryFrom<String> for PatchElem {
 }
 
 pub struct JsonPatch {
-    pub patches: Vec<PatchElem>,
+    patches: Vec<PatchElem>,
 }
 
 impl TryFrom<&str> for JsonPatch {
@@ -178,37 +181,40 @@ impl TryFrom<String> for JsonPatch {
 }
 
 impl PatchElem {
+    // TODO: maybe json need use &mut Value type
     fn apply(&self, json: &Value) -> Result<Value> {
         let mut clone_json = json.clone();
         match &self.patch {
             // TODO: refactor code
             Patch::Add(v) => {
-                add_json(&mut clone_json, &mut self.path.clone(), &v)?;
+                // add_json(&mut clone_json, &mut self.json_ptr.clone(), &v)?;
+                clone_json.add(&self.json_ptr, v.clone())?;
                 Ok(clone_json)
             }
             Patch::Remove => {
-                remove_json(&mut clone_json, &mut self.path.clone())?;
+                clone_json.delete(&self.json_ptr)?;
                 Ok(clone_json)
             }
             Patch::Replace(val) => {
-                replace_json(&mut clone_json, &mut self.path.clone(), &val)?;
+                clone_json.replace(&self.json_ptr, val.clone())?;
                 Ok(clone_json)
             }
             Patch::Move { from } => {
-                let removed_val = remove_json(&mut clone_json, &mut from.clone())?;
-                add_json(&mut clone_json, &mut self.path.clone(), &removed_val)?;
+                let removed_val = clone_json.delete(from)?;
+                clone_json.add(&self.json_ptr, removed_val)?;
                 Ok(clone_json)
             }
             Patch::Copy { from } => {
-                let target = retrieve_json(&json, from)?;
-                add_json(&mut clone_json, &mut self.path.clone(), &target)?;
+                let target = json.get_by_ptr(from)?;
+                clone_json.add(&self.json_ptr, target.clone())?;
                 Ok(clone_json)
             }
             Patch::Test(v) => {
-                let target = retrieve_json(&json, &self.path)?;
+                // let target = retrieve_json(&json, &self.path)?;
+                let target = json.get_by_ptr(&self.json_ptr)?;
                 if v != target {
                     return Err(JsonPatchError::TestFail {
-                        path: self.path.clone(),
+                        json_ptr: self.json_ptr.clone(),
                         expected: v.clone(),
                         actual: target.clone(),
                     }
@@ -221,7 +227,7 @@ impl PatchElem {
 }
 
 impl JsonPatch {
-    pub fn apply(&self, json: &Value) -> Result<Value> {
+    fn apply(&self, json: &Value) -> Result<Value> {
         let mut res = json.clone();
         for patch in self.patches.iter() {
             res = patch.apply(&res)?;
@@ -248,241 +254,446 @@ pub enum JsonPatchError {
     PathNotExit,
 
     #[error(
-        "Patch operation `test` fail for path {path:?} (expected {expected:?}, found {actual:?})"
+        "Patch operation `test` fail for path {json_ptr:?} (expected {expected:?}, found {actual:?})"
     )]
     TestFail {
-        path: Path,
+        json_ptr: JsonPointer,
         expected: Value,
         actual: Value,
     },
 }
 
-// TODO: add_json use val reference, actually I think it should use ownership
-fn add_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
-    if json.is_null() && !path.is_empty() {
-        return Err(JsonPatchError::ParentNodeNotExist.into());
-    }
-    if path.is_empty() {
-        *json = val.clone();
-        return Ok(());
-    }
-    let path_elem = path.remove(0);
+#[cfg(test)]
+mod tests {
 
-    match (json, path_elem) {
-        (Value::Object(obj), PathElem::Key(key)) => {
-            if obj.contains_key(&key) {
-                return add_json(&mut obj[&key], path, val);
-            } else {
-                if path.is_empty() {
-                    obj.insert(key.clone(), val.clone());
-                    return Ok(());
-                } else {
-                    return Err(JsonPatchError::ParentNodeNotExist.into());
-                }
-            }
-            //return add_json(&mut json[&key], path, val);
-        }
-        (Value::Array(arr), PathElem::Index(idx)) => {
-            if path.is_empty() {
-                // last PathElem is index
-                if idx <= arr.len() {
-                    arr.insert(idx, val.clone());
-                    return Ok(());
-                } else {
-                    return Err(JsonPatchError::IndexOutOfRange {
-                        index: idx,
-                        len: arr.len(),
-                    }
-                    .into());
-                }
-            } else {
-                if idx < arr.len() {
-                    return add_json(&mut arr[idx], path, val);
-                } else {
-                    return Err(JsonPatchError::IndexOutOfRange {
-                        index: idx,
-                        len: arr.len(),
-                    }
-                    .into());
-                }
+    use super::JsonPatch;
+    use super::JsonPatchError;
+    use super::PatchElem;
+    use anyhow::anyhow;
+    use anyhow::Result;
+    use serde_json::Value;
+
+    #[test]
+    fn add_simple_key() -> Result<()> {
+        let data = r#"
+        {
+            "foo": {
+                "bar": 2
             }
         }
-        (_, PathElem::Index(_)) => {
-            return Err(JsonPatchError::TokenIsNotAnArray.into());
-        }
-        (_, PathElem::Key(_)) => {
-            return Err(JsonPatchError::TokenIsNotAnObject.into());
-        }
-    }
-}
+        "#;
+        let patches_str = r#"
+            [
+                { "op": "add", "path": "/foo/baz", "value": "hello" }
+            ]
+            "#;
 
-fn remove_json(json: &mut Value, path: &mut Path) -> Result<Value> {
-    if json.is_null() && !path.is_empty() {
-        return Err(JsonPatchError::ParentNodeNotExist.into());
-    }
-
-    // TODO: this case is for init state, json is some Value, but path is empty
-    if path.is_empty() {
-        return Ok(json.clone());
-    }
-    let path_elem = path.remove(0);
-
-    match (json, path_elem) {
-        (Value::Object(obj), PathElem::Key(key)) => {
-            if let Some(child) = obj.get(&key) {
-                if path.is_empty() {
-                    let removed_val = child.clone();
-                    obj.remove(&key);
-                    return Ok(removed_val);
-                } else {
-                    return remove_json(&mut obj[&key], path);
-                }
-            } else {
-                return Err(JsonPatchError::ParentNodeNotExist.into());
+        let expected_str = r#"
+        {
+            "foo": {
+                "bar": 2,
+                "baz": "hello"
             }
         }
-        (Value::Array(arr), PathElem::Index(idx)) => {
-            // TODO: move two Err to one if (reorg if)
-            if path.is_empty() {
-                if idx < arr.len() {
-                    let remove_val = arr[idx].clone();
-                    arr.remove(idx);
-                    return Ok(remove_val);
-                } else {
-                    return Err(JsonPatchError::IndexOutOfRange {
-                        index: idx,
-                        len: arr.len(),
-                    }
-                    .into());
-                }
-            } else {
-                if idx < arr.len() {
-                    return remove_json(&mut arr[idx], path);
-                } else {
-                    return Err(JsonPatchError::IndexOutOfRange {
-                        index: idx,
-                        len: arr.len(),
-                    }
-                    .into());
-                }
+        "#;
+        test_json_patch_arr(data, patches_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn add_simple_index_key() -> Result<()> {
+        let data = r#"
+        {
+            "foo": {
+                "bar": 2,
+                "baz": [1, 3]
             }
         }
-        (_, PathElem::Index(_)) => {
-            return Err(JsonPatchError::TokenIsNotAnArray.into());
-        }
-        (_, PathElem::Key(_)) => {
-            return Err(JsonPatchError::TokenIsNotAnObject.into());
-        }
-    }
-}
+        "#;
+        let patches_str = r#"
+            [
+                { "op": "add", "path": "/foo/baz/1", "value": 2 }
+            ]
+            "#;
 
-fn replace_json(json: &mut Value, path: &mut Path, val: &Value) -> Result<()> {
-    if json.is_null() && !path.is_empty() {
-        return Err(JsonPatchError::ParentNodeNotExist.into());
-    }
-
-    if path.is_empty() {
-        *json = val.clone();
-        return Ok(());
-    }
-    let path_elem = path.remove(0);
-
-    match (json, path_elem) {
-        (Value::Object(obj), PathElem::Key(key)) => {
-            if obj.contains_key(&key) {
-                return replace_json(&mut obj[&key], path, val);
-            } else {
-                if path.is_empty() {
-                    obj[&key] = val.clone();
-                    return Ok(());
-                } else {
-                    return Err(JsonPatchError::ParentNodeNotExist.into());
-                }
+        let expected_str = r#"
+        {
+            "foo": {
+                "bar": 2,
+                "baz": [1, 2, 3]
             }
         }
-        (Value::Array(arr), PathElem::Index(idx)) => {
-            if path.is_empty() {
-                if idx < arr.len() {
-                    arr[idx] = val.clone();
-                    return Ok(());
-                } else {
-                    return Err(JsonPatchError::IndexOutOfRange {
-                        index: idx,
-                        len: arr.len(),
+        "#;
+        test_json_patch_arr(data, patches_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn add_an_array_element() -> Result<()> {
+        let data = r#"{ "foo": [ "bar", "baz" ] }"#;
+        let patches_str = r#"
+            [
+                { "op": "add", "path": "/foo/1", "value": "qux" }
+            ]
+            "#;
+        let expected_str = r#"{ "foo": [ "bar", "qux", "baz" ] }"#;
+        test_json_patch_arr(data, patches_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn add_an_object_member() -> Result<()> {
+        let data = r#"{ "foo": "bar"}"#;
+        let patches_str = r#"
+            [
+                { "op": "add", "path": "/baz", "value": "qux" }
+            ]"#;
+        let expected_str = r#"{
+                "baz": "qux",
+                "foo": "bar"
+            }"#;
+        test_json_patch_arr(data, patches_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn add_a_nested_member_object() -> Result<()> {
+        let data = r#"{ "foo": "bar"}"#;
+        let patches_str = r#"
+            [
+                { "op": "add", "path": "/child", "value": { "grandchild": { } } }
+            ]
+            "#;
+        let expected_str = r#"
+                {
+                    "foo": "bar",
+                    "child": {
+                        "grandchild": {}
                     }
-                    .into());
                 }
-            } else {
-                if idx < arr.len() {
-                    return replace_json(&mut arr[idx], path, val);
-                } else {
-                    return Err(JsonPatchError::IndexOutOfRange {
-                        index: idx,
-                        len: arr.len(),
-                    }
-                    .into());
-                }
+                "#;
+        test_json_patch_arr(data, patches_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn remove_simple_key() -> Result<()> {
+        let data = r#"
+        {
+            "foo": {
+                "bar": 2,
+                "baz": "hello"
             }
         }
-        (_, PathElem::Index(_)) => {
-            return Err(JsonPatchError::TokenIsNotAnArray.into());
-        }
-        (_, PathElem::Key(_)) => {
-            return Err(JsonPatchError::TokenIsNotAnObject.into());
-        }
-    }
-}
+        "#;
+        let patches_str = r#"
+            [
+                { "op": "remove", "path": "/foo/baz"}
+            ]
+            "#;
 
-fn retrieve_json<'a>(json: &'a Value, path: &Path) -> Result<&'a Value> {
-    let mut current_json = json;
-    let path_len = path.len();
-    for (idx, path_elem) in path.iter().enumerate() {
-        match (current_json, path_elem) {
-            (Value::Object(obj), PathElem::Key(key)) => {
-                if let Some(child) = current_json.get(key) {
-                    if idx == path_len - 1 {
-                        return Ok(child);
+        let expected_str = r#"
+        {
+            "foo": {
+                "bar": 2
+            }
+        }
+        "#;
+        test_json_patch_arr(data, patches_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn remove_simple_index_key() -> Result<()> {
+        let data = r#"
+        {
+            "foo": {
+                "bar": 2,
+                "baz": [1, 2, 3]
+            }
+        }
+        "#;
+        let patches_str = r#"
+            [
+                { "op": "remove", "path": "/foo/baz/1"}
+            ]
+            "#;
+
+        let expected_str = r#"
+        {
+            "foo": {
+                "bar": 2,
+                "baz": [1, 3]
+            }
+        }
+        "#;
+        test_json_patch_arr(data, patches_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn remove_an_object_member() -> Result<()> {
+        let data = r#"{
+                "baz": "qux",
+                "foo": "bar"
+            }"#;
+        let patches_str = r#"
+            [
+                { "op": "remove", "path": "/baz" }
+            ]
+            "#;
+        let expected_str = r#"{ "foo": "bar" }"#;
+        test_json_patch_arr(data, patches_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn remove_an_array_element() -> Result<()> {
+        let data = r#"{ "foo": [ "bar", "qux", "baz" ] }"#;
+        let patches_str = r#"
+            [
+                { "op": "remove", "path": "/foo/1" }
+            ]
+            "#;
+        let expected_str = r#"{ "foo": [ "bar", "baz" ] }"#;
+        test_json_patch_arr(data, patches_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn replace_simple_key() -> Result<()> {
+        let data = r#"
+        {
+            "foo": {
+                "bar": 2,
+                "baz": "world"
+            }
+        }
+        "#;
+        let patches_str = r#"
+            [
+                { "op": "replace", "path": "/foo/baz", "value": "hello" }
+            ]
+            "#;
+
+        let expected_str = r#"
+        {
+            "foo": {
+                "bar": 2,
+                "baz": "hello"
+            }
+        }
+        "#;
+        test_json_patch_arr(data, patches_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn replace_simple_index_key() -> Result<()> {
+        let data = r#"
+        {
+            "foo": {
+                "bar": 2,
+                "baz": [1, 2, 3]
+            }
+        }
+        "#;
+        let patches_str = r#"
+            [
+                { "op": "replace", "path": "/foo/baz/1", "value": "hello" }
+            ]
+            "#;
+
+        let expected_str = r#"
+        {
+            "foo": {
+                "bar": 2,
+                "baz": [1, "hello", 3]
+            }
+        }
+        "#;
+        test_json_patch_arr(data, patches_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn replace_a_value() -> Result<()> {
+        let data = r#"
+            {
+                "baz": "qux",
+                "foo": "bar"
+            }"#;
+        let patches_str = r#"
+            [
+                { "op": "replace", "path": "/baz", "value": "boo" }
+            ]
+            "#;
+        let expected_str = r#"
+                {
+                    "baz": "boo",
+                    "foo": "bar"
+                }
+                "#;
+        test_json_patch_arr(data, patches_str, expected_str)?;
+        Ok(())
+    }
+
+    fn test_json_patch(json: &str, patch_str: &str, expected_json_str: &str) -> Result<()> {
+        let patch: PatchElem = PatchElem::try_from(patch_str)?;
+        let jp = JsonPatch {
+            patches: vec![patch],
+        };
+        let res = jp.apply(&serde_json::from_str(json)?)?;
+        let expected: Value = serde_json::from_str(expected_json_str)?;
+        assert_eq!(res, expected);
+        Ok(())
+    }
+
+    fn test_json_patch_arr(json: &str, patches_str: &str, expected_json_str: &str) -> Result<()> {
+        let jp: JsonPatch = JsonPatch::try_from(patches_str)?;
+        let res = jp.apply(&serde_json::from_str(json)?)?;
+        let expected: Value = serde_json::from_str(expected_json_str)?;
+        assert_eq!(res, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn move_a_value() -> Result<()> {
+        let data = r#"
+            {
+                "foo": {
+                    "bar": "baz",
+                    "waldo": "fred"
+            },
+                "qux": {
+                    "corge": "grault"
+                }
+            }"#;
+        let patch_str = r#"{ "op": "move", "from": "/foo/waldo", "path": "/qux/thud" }"#;
+        let expected_str = r#"
+            {
+                "foo": {
+                    "bar": "baz"
+                },
+                "qux": {
+                    "corge": "grault",
+                    "thud": "fred"
+                }
+           }"#;
+
+        test_json_patch(data, patch_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn move_an_array_element() -> Result<()> {
+        let data = r#"{ "foo": [ "all", "grass", "cows", "eat" ] }"#;
+        let patch_str = r#"{ "op": "move", "from": "/foo/1", "path": "/foo/3" }"#;
+        let expected_str = r#"{ "foo": [ "all", "cows", "eat", "grass" ] }"#;
+        test_json_patch(data, patch_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn copy_a_value() -> Result<()> {
+        let data = r#"
+            {
+                "foo": {
+                    "bar": "baz",
+                    "waldo": "fred"
+            },
+                "qux": {
+                    "corge": "grault"
+                }
+            }"#;
+        let patch_str = r#"{ "op": "copy", "from": "/foo/waldo", "path": "/qux/thud" }"#;
+        let expected_str = r#"
+            {
+                "foo": {
+                    "bar": "baz",
+                    "waldo": "fred"
+                },
+                "qux": {
+                    "corge": "grault",
+                    "thud": "fred"
+                }
+           }"#;
+
+        test_json_patch(data, patch_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn copy_an_array_element() -> Result<()> {
+        let data = r#"{ "foo": [ "all", "grass", "cows", "eat" ] }"#;
+        let patch_str = r#"{ "op": "copy", "from": "/foo/1", "path": "/foo/3" }"#;
+        let expected_str = r#"{ "foo": [ "all", "grass", "cows", "grass", "eat" ] }"#;
+        test_json_patch(data, patch_str, expected_str)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_a_value_success() -> Result<()> {
+        let data = r#"
+           {
+                "baz": "qux",
+                "foo": [ "a", 2, "c" ]
+           }"#;
+        let patches_str = r#"
+            [
+                { "op": "test", "path": "/baz", "value": "qux" },
+                { "op": "test", "path": "/foo/1", "value": 2 }
+            ]"#;
+        test_json_patch_arr(data, patches_str, data)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_a_value_error() -> Result<()> {
+        let data = r#"{ "baz": "qux" }"#;
+        let patches_str = r#"
+            [
+                { "op": "test", "path": "/baz", "value": "bar" }
+            ]
+            "#;
+        match test_json_patch_arr(data, patches_str, data) {
+            Ok(_) => Err(anyhow!("not get test error")),
+            Err(e) => match e.downcast_ref::<JsonPatchError>() {
+                Some(JsonPatchError::TestFail {
+                    json_ptr,
+                    expected,
+                    actual,
+                }) => {
+                    if json_ptr.to_escaped_string() == "/baz"
+                        && expected.to_string() == "\"bar\""
+                        && actual.to_string() == "\"qux\""
+                    {
+                        Ok(())
                     } else {
-                        current_json = child;
-                    }
-                } else {
-                    //TODO: check PahtNotExit and ParentNodeNotExist, if need both, and difference
-                    return Err(JsonPatchError::PathNotExit.into());
-                }
-            }
-            (Value::Array(arr), PathElem::Index(idx)) => {
-                // TODO: move two Err to one if (reorg if)
-                let idx = *idx;
-                if idx == path_len - 1 {
-                    if idx < arr.len() {
-                        return Ok(&arr[idx]);
-                    } else {
-                        return Err(JsonPatchError::IndexOutOfRange {
-                            index: idx,
-                            len: arr.len(),
-                        }
-                        .into());
-                    }
-                } else {
-                    if idx < arr.len() {
-                        current_json = &arr[idx];
-                    } else {
-                        return Err(JsonPatchError::IndexOutOfRange {
-                            index: idx,
-                            len: arr.len(),
-                        }
-                        .into());
+                        Err(anyhow!("Wrong test fail error: {}", e))
                     }
                 }
-            }
-            (_, PathElem::Index(_)) => {
-                return Err(JsonPatchError::TokenIsNotAnArray.into());
-            }
-            (_, PathElem::Key(_)) => {
-                return Err(JsonPatchError::TokenIsNotAnObject.into());
-            }
+                None => Err(anyhow!("Not get JsonPatchError, get {}", e)),
+                _ => Err(anyhow!("Get the wrong JsonPatchError {}", e)),
+            },
         }
     }
-    unreachable!()
-}
 
+    #[test]
+    fn ignore_unrecognized_elements() -> Result<()> {
+        let data = r#"{ "foo": "bar" }"#;
+        let patch_str = r#"
+            [
+                { "op": "add", "path": "/baz", "value": "qux", "xyz": 123 }
+            ]
+            "#;
+        let expected_str = r#"
+            {
+                "foo": "bar",
+                "baz": "qux"
+            }
+            "#;
+        test_json_patch_arr(data, patch_str, expected_str)?;
+        Ok(())
+    }
+}
