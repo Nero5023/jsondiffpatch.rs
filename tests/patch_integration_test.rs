@@ -17,18 +17,12 @@ mod tests {
             }
         }
         "#;
-        let patch = PatchElem {
-            patch: Patch::Add(json!("hello")),
-            path: Path::new(vec![
-                PathElem::Key("foo".to_string()),
-                PathElem::Key("baz".to_string()),
-            ]),
-        };
+        let patches_str = r#"
+            [
+                { "op": "add", "path": "/foo/baz", "value": "hello" }
+            ]
+            "#;
 
-        let jp = JsonPatch {
-            patches: vec![patch],
-        };
-        let res = jp.apply(&serde_json::from_str(data)?).unwrap();
         let expected_str = r#"
         {
             "foo": {
@@ -37,8 +31,7 @@ mod tests {
             }
         }
         "#;
-        let expected: Value = serde_json::from_str(expected_str)?;
-        assert_eq!(res, expected);
+        test_json_patch_arr(data, patches_str, expected_str)?;
         Ok(())
     }
 
@@ -52,19 +45,12 @@ mod tests {
             }
         }
         "#;
-        let patch = PatchElem {
-            patch: Patch::Add(json!(2)),
-            path: Path::new(vec![
-                PathElem::Key("foo".to_string()),
-                PathElem::Key("baz".to_string()),
-                PathElem::Index(1),
-            ]),
-        };
+        let patches_str = r#"
+            [
+                { "op": "add", "path": "/foo/baz/1", "value": 2 }
+            ]
+            "#;
 
-        let jp = JsonPatch {
-            patches: vec![patch],
-        };
-        let res = jp.apply(&serde_json::from_str(data)?).unwrap();
         let expected_str = r#"
         {
             "foo": {
@@ -73,8 +59,7 @@ mod tests {
             }
         }
         "#;
-        let expected: Value = serde_json::from_str(expected_str)?;
-        assert_eq!(res, expected);
+        test_json_patch_arr(data, patches_str, expected_str)?;
         Ok(())
     }
 
@@ -136,18 +121,12 @@ mod tests {
             }
         }
         "#;
-        let patch = PatchElem {
-            patch: Patch::Remove,
-            path: Path::new(vec![
-                PathElem::Key("foo".to_string()),
-                PathElem::Key("baz".to_string()),
-            ]),
-        };
+        let patches_str = r#"
+            [
+                { "op": "remove", "path": "/foo/baz"}
+            ]
+            "#;
 
-        let jp = JsonPatch {
-            patches: vec![patch],
-        };
-        let res = jp.apply(&serde_json::from_str(data)?).unwrap();
         let expected_str = r#"
         {
             "foo": {
@@ -155,8 +134,7 @@ mod tests {
             }
         }
         "#;
-        let expected: Value = serde_json::from_str(expected_str)?;
-        assert_eq!(res, expected);
+        test_json_patch_arr(data, patches_str, expected_str)?;
         Ok(())
     }
 
@@ -170,19 +148,12 @@ mod tests {
             }
         }
         "#;
-        let patch = PatchElem {
-            patch: Patch::Remove,
-            path: Path::new(vec![
-                PathElem::Key("foo".to_string()),
-                PathElem::Key("baz".to_string()),
-                PathElem::Index(1),
-            ]),
-        };
+        let patches_str = r#"
+            [
+                { "op": "remove", "path": "/foo/baz/1"}
+            ]
+            "#;
 
-        let jp = JsonPatch {
-            patches: vec![patch],
-        };
-        let res = jp.apply(&serde_json::from_str(data)?).unwrap();
         let expected_str = r#"
         {
             "foo": {
@@ -191,8 +162,7 @@ mod tests {
             }
         }
         "#;
-        let expected: Value = serde_json::from_str(expected_str)?;
-        assert_eq!(res, expected);
+        test_json_patch_arr(data, patches_str, expected_str)?;
         Ok(())
     }
 
@@ -235,18 +205,12 @@ mod tests {
             }
         }
         "#;
-        let patch = PatchElem {
-            patch: Patch::Replace(json!("hello")),
-            path: Path::new(vec![
-                PathElem::Key("foo".to_string()),
-                PathElem::Key("baz".to_string()),
-            ]),
-        };
+        let patches_str = r#"
+            [
+                { "op": "replace", "path": "/foo/baz", "value": "hello" }
+            ]
+            "#;
 
-        let jp = JsonPatch {
-            patches: vec![patch],
-        };
-        let res = jp.apply(&serde_json::from_str(data)?).unwrap();
         let expected_str = r#"
         {
             "foo": {
@@ -255,8 +219,7 @@ mod tests {
             }
         }
         "#;
-        let expected: Value = serde_json::from_str(expected_str)?;
-        assert_eq!(res, expected);
+        test_json_patch_arr(data, patches_str, expected_str)?;
         Ok(())
     }
 
@@ -270,19 +233,12 @@ mod tests {
             }
         }
         "#;
-        let patch = PatchElem {
-            patch: Patch::Replace(json!("hello")),
-            path: Path::new(vec![
-                PathElem::Key("foo".to_string()),
-                PathElem::Key("baz".to_string()),
-                PathElem::Index(1),
-            ]),
-        };
+        let patches_str = r#"
+            [
+                { "op": "replace", "path": "/foo/baz/1", "value": "hello" }
+            ]
+            "#;
 
-        let jp = JsonPatch {
-            patches: vec![patch],
-        };
-        let res = jp.apply(&serde_json::from_str(data)?).unwrap();
         let expected_str = r#"
         {
             "foo": {
@@ -291,8 +247,7 @@ mod tests {
             }
         }
         "#;
-        let expected: Value = serde_json::from_str(expected_str)?;
-        assert_eq!(res, expected);
+        test_json_patch_arr(data, patches_str, expected_str)?;
         Ok(())
     }
 
@@ -440,11 +395,11 @@ mod tests {
             Ok(_) => Err(anyhow!("not get test error")),
             Err(e) => match e.downcast_ref::<JsonPatchError>() {
                 Some(JsonPatchError::TestFail {
-                         path,
+                         json_ptr,
                          expected,
                          actual,
                      }) => {
-                    if path.to_string() == "/baz"
+                    if json_ptr.to_escaped_string() == "/baz"
                         && expected.to_string() == "\"bar\""
                         && actual.to_string() == "\"qux\""
                     {
@@ -488,12 +443,8 @@ mod tests {
         match test_json_patch_arr(data,patch_str,data){
             Ok(_) => Err(anyhow!("not get test error")),
             Err(e) => {
-                println!("######{}",e);
-                match e.downcast_ref::<JsonPatchError>() {
-                    Some(JsonPatchError::ParentNodeNotExist) => Ok(()),
-                    None => Err(anyhow!("Not get JsonPatchError, get {}", e)),
-                    _ => Err(anyhow!("Get the wrong JsonPatchError {}", e)),
-                }},
+                Ok(())
+            },
         }
     }
 }
