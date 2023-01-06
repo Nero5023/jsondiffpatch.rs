@@ -2,16 +2,13 @@ mod jsonptr;
 mod lcs;
 pub mod patch;
 
-use anyhow::{anyhow, Result};
-use core::result;
+use anyhow::Result;
 use serde_json::map::Map;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::From;
-use std::convert::TryFrom;
-use std::error::Error;
-use std::fmt::{format, Display};
+use std::fmt::Display;
 use std::fs::File;
 use std::io::BufReader;
 use std::ops::Deref;
@@ -51,50 +48,9 @@ impl Display for PathElem {
     }
 }
 
-impl From<&str> for PathElem {
-    fn from(s: &str) -> Self {
-        if let Ok(num) = s.parse::<usize>() {
-            PathElem::Index(num)
-        } else {
-            PathElem::Key(s.to_owned())
-        }
-    }
-}
-
-impl From<String> for PathElem {
-    fn from(s: String) -> Self {
-        PathElem::from(s.as_ref())
-    }
-}
-
 //type Path = Vec<PathElem>;
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Path(Vec<PathElem>);
-
-impl TryFrom<&str> for Path {
-    type Error = anyhow::Error;
-
-    fn try_from(s: &str) -> std::result::Result<Self, Self::Error> {
-        if !s.starts_with("/") {
-            return Err(anyhow!("path '{}' should start with '/'", s));
-        }
-        let elems = s
-            .split("/")
-            .into_iter()
-            .skip(1)
-            .map(|elem| elem.into())
-            .collect::<Vec<PathElem>>();
-        Ok(Path(elems))
-    }
-}
-
-impl TryFrom<String> for Path {
-    type Error = anyhow::Error;
-
-    fn try_from(s: String) -> std::result::Result<Self, Self::Error> {
-        Path::try_from(s.as_ref())
-    }
-}
 
 impl Display for Path {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -208,16 +164,8 @@ impl Display for DiffElem {
 }
 
 impl DiffElem {
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
     pub fn path_str(&self) -> String {
         self.path.to_string()
-    }
-
-    pub fn diff_change(&self) -> &DiffChange {
-        &self.diff
     }
 }
 
@@ -239,16 +187,16 @@ impl JsonDiff {
         let mut path2change = HashMap::new();
         let mut child_added_keys = HashMap::new();
         for diff in diffs {
-            path2change.insert(diff.path().clone(), diff.diff_change().clone());
-            if let DiffChange::Add(_) = diff.diff_change() {
-                let last_key = diff.path().last().unwrap();
+            if let DiffChange::Add(_) = diff.diff {
+                let last_key = diff.path.last().unwrap();
                 // just for PathElem::Key
                 if let PathElem::Key(str_key) = last_key {
-                    let parent_path = diff.path().parent_path().unwrap();
+                    let parent_path = diff.path.parent_path().unwrap();
                     let keys = child_added_keys.entry(parent_path).or_insert_with(Vec::new);
                     keys.push(str_key.to_owned());
                 }
             }
+            path2change.insert(diff.path, diff.diff);
         }
         Self {
             path2change,
