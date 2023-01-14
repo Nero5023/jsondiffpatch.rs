@@ -58,7 +58,7 @@ impl Token {
     }
 
     pub fn to_escaped_string(&self) -> String {
-        Self::unescape(&self.val).to_string()
+        Self::escape(&self.val).to_string()
     }
 }
 
