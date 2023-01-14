@@ -181,13 +181,10 @@ impl TryFrom<String> for JsonPatch {
 }
 
 impl PatchElem {
-    // TODO: maybe json need use &mut Value type
     fn apply(&self, json: &Value) -> Result<Value> {
         let mut clone_json = json.clone();
         match &self.patch {
-            // TODO: refactor code
             Patch::Add(v) => {
-                // add_json(&mut clone_json, &mut self.json_ptr.clone(), &v)?;
                 clone_json.add(&self.json_ptr, v.clone())?;
                 Ok(clone_json)
             }
@@ -210,7 +207,6 @@ impl PatchElem {
                 Ok(clone_json)
             }
             Patch::Test(v) => {
-                // let target = retrieve_json(&json, &self.path)?;
                 let target = json.get_by_ptr(&self.json_ptr)?;
                 if v != target {
                     return Err(JsonPatchError::TestFail {
