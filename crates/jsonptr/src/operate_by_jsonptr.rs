@@ -1,4 +1,4 @@
-use super::pointer::JsonPointer;
+use crate::pointer::JsonPointer;
 use anyhow::Result;
 use serde_json::Value;
 

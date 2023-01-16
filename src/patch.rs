@@ -6,8 +6,8 @@ use thiserror::Error;
 // TODO: maybe use thiserror Result<T, JsonPatchError>
 use anyhow::{anyhow, Result};
 
-use crate::jsonptr::operate_by_jsonptr::*;
-use crate::jsonptr::pointer::JsonPointer;
+use jsonptr::operate_by_jsonptr::*;
+use jsonptr::pointer::JsonPointer;
 
 #[derive(Serialize, Deserialize)]
 struct Operation {

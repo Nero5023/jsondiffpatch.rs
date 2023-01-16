@@ -1,4 +1,3 @@
-mod jsonptr;
 mod lcs;
 pub mod patch;
 

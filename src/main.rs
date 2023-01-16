@@ -9,8 +9,6 @@ use std::fs;
 use std::process;
 use std::unreachable;
 
-mod jsonptr;
-
 const INDENT_SIZE: usize = 4;
 
 fn format_json_val<F>(
