@@ -3,10 +3,8 @@ mod tests {
 
     use anyhow::anyhow;
     use anyhow::Result;
-    use serde_json::json;
+    use jsonpatch_rs::{JsonPatch, JsonPatchError, PatchElem};
     use serde_json::Value;
-    use json_diff_patch::{Path, PathElem};
-    use json_diff_patch::patch::{JsonPatch, JsonPatchError, Patch, PatchElem};
 
     #[test]
     fn add_simple_key() -> Result<()> {
@@ -395,10 +393,10 @@ mod tests {
             Ok(_) => Err(anyhow!("not get test error")),
             Err(e) => match e.downcast_ref::<JsonPatchError>() {
                 Some(JsonPatchError::TestFail {
-                         json_ptr,
-                         expected,
-                         actual,
-                     }) => {
+                    json_ptr,
+                    expected,
+                    actual,
+                }) => {
                     if json_ptr.to_escaped_string() == "/baz"
                         && expected.to_string() == "\"bar\""
                         && actual.to_string() == "\"qux\""
@@ -433,18 +431,16 @@ mod tests {
     }
 
     #[test]
-    fn add_to_nonexistent_target()->Result<()>{
+    fn add_to_nonexistent_target() -> Result<()> {
         let data = r#"{ "foo": "bar" }"#;
         let patch_str = r#"
            [
                 { "op": "add", "path": "/baz/bat", "value": "qux" }
            ]
         "#;
-        match test_json_patch_arr(data,patch_str,data){
+        match test_json_patch_arr(data, patch_str, data) {
             Ok(_) => Err(anyhow!("not get test error")),
-            Err(e) => {
-                Ok(())
-            },
+            Err(e) => Ok(()),
         }
     }
 }

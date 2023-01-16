@@ -1,5 +1,5 @@
 mod lcs;
-pub mod patch;
+// pub mod patch;
 
 use anyhow::Result;
 use serde_json::map::Map;

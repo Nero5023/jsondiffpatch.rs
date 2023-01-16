@@ -1,9 +1,9 @@
 use anyhow::Result;
 use clap::Parser;
 use console::Style;
-use json_diff_patch::DiffChange;
-use json_diff_patch::JsonDiff;
-use json_diff_patch::Path;
+use jsondiff::DiffChange;
+use jsondiff::JsonDiff;
+use jsondiff::Path;
 use serde_json::Value;
 use std::fs;
 use std::process;
