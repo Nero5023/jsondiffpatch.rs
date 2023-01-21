@@ -372,12 +372,16 @@ fn diff_json_arr_lcs(
             idx1 += 1;
         } else if idx0 < same_idx_pair.0 && idx1 == same_idx_pair.1 {
             // remove val in arr0
-            let new_path = path.clone_then_add_idx(shift_idx);
-            diffs.push(DiffElem {
-                diff: DiffChange::Remove(arr0[idx0].clone()),
-                path: new_path,
-            });
-            idx0 += 1;
+            let mut idx = shift_idx;
+            while idx0 < same_idx_pair.0 {
+                let new_path = path.clone_then_add_idx(idx);
+                diffs.push(DiffElem {
+                    diff: DiffChange::Remove(arr0[idx0].clone()),
+                    path: new_path,
+                });
+                idx0 += 1;
+                idx += 1;
+            }
         } else if idx0 == same_idx_pair.0 && idx1 < same_idx_pair.1 {
             // add val in arr1
             let new_path = path.clone_then_add_idx(shift_idx);
@@ -613,6 +617,51 @@ mod tests {
                         new_val: Value::Number(Number::from(13)),
                     },
                     path: Path::new(vec![PathElem::Key("a".to_owned()), PathElem::Index(6)]),
+                },
+            ],
+        );
+    }
+
+    // consecutive deletions
+    #[test]
+    fn test_arr_diff2() {
+        let json0 = "[0,1,2,3]";
+        let json1 = "[0,3]";
+        check_diff(
+            json0,
+            json1,
+            vec![
+                DiffElem {
+                    diff: DiffChange::Remove(Value::Number(Number::from(1))),
+                    path: Path::new(vec![PathElem::Index(1)]),
+                },
+                DiffElem {
+                    diff: DiffChange::Remove(Value::Number(Number::from(2))),
+                    path: Path::new(vec![PathElem::Index(2)]),
+                },
+            ],
+        );
+    }
+
+    #[test]
+    fn test_arr_diff3() {
+        let json0 = "[0,1,2,3]";
+        let json1 = "[0,3,4]";
+        check_diff(
+            json0,
+            json1,
+            vec![
+                DiffElem {
+                    diff: DiffChange::Remove(Value::Number(Number::from(1))),
+                    path: Path::new(vec![PathElem::Index(1)]),
+                },
+                DiffElem {
+                    diff: DiffChange::Remove(Value::Number(Number::from(2))),
+                    path: Path::new(vec![PathElem::Index(2)]),
+                },
+                DiffElem {
+                    diff: DiffChange::Add(Value::Number(Number::from(4))),
+                    path: Path::new(vec![PathElem::Index(2)]),
                 },
             ],
         );
