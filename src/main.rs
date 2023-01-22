@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use console::Style;
 use jsondiff::DiffChange;
 use jsondiff::JsonDiff;
@@ -130,98 +130,111 @@ fn format_json_loop<F>(
                 output(" ", &right_brace)
             }
             Value::Array(arr) => {
+                // if let Some(arr_changes) = json_diffs.get_arr_changes(curr_path) {
+                //     let mut old_idx: usize = 0;
+                //     let mut new_idx: usize = 0;
+                //     let mut new_len = arr.len();
+                //     for
+                // }
                 let left_bracket = format!("{}{}{}", " ", indent_key, "[");
                 output(" ", &left_bracket);
 
-                let mut cur_idx: usize = 0;
-                let mut real_idx: usize = 0;
-                let mut curr_len = arr.len();
-                while cur_idx < curr_len {
-                    let new_path = curr_path.clone_then_add_idx(cur_idx);
-                    if let Some(diff_change) = json_diffs.get_diffchange(&new_path) {
-                        match diff_change {
-                            DiffChange::Add(val) => {
-                                format_json_val(
-                                    val,
-                                    None,
-                                    indent_count + INDENT_SIZE,
-                                    Some("+"),
-                                    output,
-                                );
-                                cur_idx += 1;
-                                curr_len += 1;
+                let empty_vec = &vec![];
+                let arr_changes = json_diffs.get_arr_changes(curr_path).unwrap_or(&empty_vec);
+                let mut old_idx: usize = 0;
+                let mut new_idx: usize = 0;
+                let mut new_len = arr.len();
+                let mut diffchange_idx: usize = 0;
+                while new_idx < new_len {
+                    if diffchange_idx < arr_changes.len() {
+                        let diff_change = &arr_changes[diffchange_idx];
+                        let idx = diff_change.path.arr_idx().unwrap();
+                        if idx == new_idx {
+                            match &diff_change.diff {
+                                DiffChange::Replace { old_val, new_val } => {
+                                    format_json_val(
+                                        old_val,
+                                        None,
+                                        indent_count + INDENT_SIZE,
+                                        Some("-"),
+                                        output,
+                                    );
+                                    format_json_val(
+                                        new_val,
+                                        None,
+                                        indent_count + INDENT_SIZE,
+                                        Some("+"),
+                                        output,
+                                    );
+                                    diffchange_idx += 1;
+                                    old_idx += 1;
+                                    new_idx += 1;
+                                }
+                                DiffChange::Add(val) => {
+                                    format_json_val(
+                                        val,
+                                        None,
+                                        indent_count + INDENT_SIZE,
+                                        Some("+"),
+                                        output,
+                                    );
+                                    new_idx += 1;
+                                    new_len += 1;
+                                    diffchange_idx += 1;
+                                }
+                                DiffChange::Remove(_) => {
+                                    let mut last_remove_idx =
+                                        arr_changes[diffchange_idx].path.arr_idx().unwrap() - 1;
+                                    while diffchange_idx < arr_changes.len()
+                                        && arr_changes[diffchange_idx].diff.is_remove()
+                                        && arr_changes[diffchange_idx].path.arr_idx().unwrap()
+                                            == last_remove_idx + 1
+                                    {
+                                        let diff_change = &arr_changes[diffchange_idx];
+                                        let remove_val = diff_change.diff.as_remove().unwrap();
+
+                                        format_json_val(
+                                            remove_val,
+                                            None,
+                                            indent_count + INDENT_SIZE,
+                                            Some("-"),
+                                            output,
+                                        );
+
+                                        assert_eq!(remove_val, &arr[old_idx]);
+                                        old_idx += 1;
+                                        new_len -= 1;
+                                        diffchange_idx += 1;
+                                        last_remove_idx += 1;
+                                    }
+                                }
                             }
-                            DiffChange::Remove(val) => {
-                                format_json_val(
-                                    val,
-                                    None,
-                                    indent_count + INDENT_SIZE,
-                                    Some("-"),
-                                    output,
-                                );
-                                assert_eq!(val, &arr[real_idx]);
-                                curr_len -= 1;
-                                real_idx += 1;
-                            }
-                            DiffChange::Replace { old_val, new_val } => {
-                                format_json_val(
-                                    old_val,
-                                    None,
-                                    indent_count + INDENT_SIZE,
-                                    Some("-"),
-                                    output,
-                                );
-                                format_json_val(
-                                    new_val,
-                                    None,
-                                    indent_count + INDENT_SIZE,
-                                    Some("+"),
-                                    output,
-                                );
-                                cur_idx += 1;
-                                real_idx += 1;
-                            }
+                        } else {
+                            let path = curr_path.clone_then_add_idx(old_idx);
+                            format_json_loop(
+                                &arr[old_idx],
+                                &path,
+                                json_diffs,
+                                indent_count + INDENT_SIZE,
+                                output,
+                            );
+                            old_idx += 1;
+                            new_idx += 1;
                         }
                     } else {
+                        let path = curr_path.clone_then_add_idx(old_idx);
                         format_json_loop(
-                            &arr[real_idx],
-                            &new_path,
+                            &arr[old_idx],
+                            &path,
                             json_diffs,
                             indent_count + INDENT_SIZE,
                             output,
                         );
-                        real_idx += 1;
-                        cur_idx += 1;
+                        old_idx += 1;
+                        new_idx += 1;
                     }
                 }
-                let mut new_path = curr_path.clone_then_add_idx(cur_idx);
-                while let Some(diff_change) = json_diffs.get_diffchange(&new_path) {
-                    match diff_change {
-                        DiffChange::Add(val) => {
-                            format_json_val(
-                                val,
-                                None,
-                                indent_count + INDENT_SIZE,
-                                Some("+"),
-                                output,
-                            );
-                            cur_idx += 1;
-                            new_path.pop();
-                            new_path.push_idx(cur_idx);
-                        }
-                        DiffChange::Remove(_) => {
-                            cur_idx += 1;
-                            new_path.pop();
-                            new_path.push_idx(cur_idx);
-                        }
-                        DiffChange::Replace {
-                            old_val: _,
-                            new_val: _,
-                        } => {
-                            unreachable!();
-                        }
-                    }
-                }
+
                 let right_bracket = format!("{}{}", " ".repeat(indent_count), "]");
                 output(" ", &right_bracket);
             }
@@ -249,30 +262,52 @@ fn read_json_file(path: &str) -> String {
 
 #[derive(Parser)]
 struct Cli {
-    /// Old file
-    first_json: String,
-    /// New file
-    second_json: String,
+    #[clap(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    Diff {
+        left_json: String,
+        right_json: String,
+    },
+
+    Patch {
+        left_json: String,
+        right_json: String,
+    },
 }
 
 fn main() -> Result<()> {
     let args = Cli::parse();
-    let json1 = read_json_file(&args.first_json);
-    let json2 = read_json_file(&args.second_json);
+    match args.command {
+        Commands::Diff {
+            left_json,
+            right_json,
+        } => {
+            let json1 = read_json_file(&left_json);
+            let json2 = read_json_file(&right_json);
 
-    let json_diffs = JsonDiff::diff_json(&json1, &json2)?;
+            let json_diffs = JsonDiff::diff_json(&json1, &json2)?;
 
-    let mut output_mut = |diff_opp: &str, line: &str| {
-        let str_output = match diff_opp {
-            "+" => format!("{}", Style::new().green().apply_to(line)),
-            "-" => format!("{}", Style::new().red().apply_to(line)),
-            _ => line.to_owned(),
-        };
-        println!("{}", str_output);
-    };
+            let mut output_mut = |diff_opp: &str, line: &str| {
+                let str_output = match diff_opp {
+                    "+" => format!("{}", Style::new().green().apply_to(line)),
+                    "-" => format!("{}", Style::new().red().apply_to(line)),
+                    _ => line.to_owned(),
+                };
+                println!("{}", str_output);
+            };
 
-    let v: Value = serde_json::from_str(&json1)?;
+            let v: Value = serde_json::from_str(&json1)?;
 
-    format_json_loop(&v, &Path::empty(), &json_diffs, 1, &mut output_mut);
+            format_json_loop(&v, &Path::empty(), &json_diffs, 1, &mut output_mut);
+        }
+        Commands::Patch {
+            left_json,
+            right_json,
+        } => todo!(),
+    }
     Ok(())
 }

@@ -128,12 +128,34 @@ impl Path {
             None
         }
     }
+
+    pub fn is_arr_path(&self) -> bool {
+        if let Some(last_key) = self.last() {
+            match last_key {
+                PathElem::Key(_) => false,
+                PathElem::Index(_) => true,
+            }
+        } else {
+            false
+        }
+    }
+
+    pub fn arr_idx(&self) -> Option<usize> {
+        if let Some(last_key) = self.last() {
+            match last_key {
+                PathElem::Key(_) => None,
+                PathElem::Index(idx) => Some(*idx),
+            }
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct DiffElem {
-    diff: DiffChange,
-    path: Path,
+    pub diff: DiffChange,
+    pub path: Path,
 }
 
 impl Display for DiffElem {
@@ -175,31 +197,57 @@ pub enum DiffChange {
     Remove(Value),
 }
 
+impl DiffChange {
+    pub fn is_remove(&self) -> bool {
+        match self {
+            DiffChange::Remove(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn as_remove(&self) -> Option<&Value> {
+        match self {
+            DiffChange::Remove(val) => Some(val),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct JsonDiff {
-    path2change: HashMap<Path, DiffChange>,
+    path2obj_change: HashMap<Path, DiffChange>,
     child_added_keys: HashMap<Path, Vec<String>>,
+    path2arr_change: HashMap<Path, Vec<DiffElem>>,
 }
 
 impl JsonDiff {
     fn new(diffs: Vec<DiffElem>) -> Self {
-        let mut path2change = HashMap::new();
+        let mut path2obj_change = HashMap::new();
         let mut child_added_keys = HashMap::new();
+        let mut path2arr_change = HashMap::new();
         for diff in diffs {
-            if let DiffChange::Add(_) = diff.diff {
-                let last_key = diff.path.last().unwrap();
-                // just for PathElem::Key
-                if let PathElem::Key(str_key) = last_key {
-                    let parent_path = diff.path.parent_path().unwrap();
-                    let keys = child_added_keys.entry(parent_path).or_insert_with(Vec::new);
-                    keys.push(str_key.to_owned());
+            if diff.path.is_arr_path() {
+                let arr_changes = path2arr_change
+                    .entry(diff.path.parent_path().unwrap())
+                    .or_insert_with(Vec::new);
+                arr_changes.push(diff);
+            } else {
+                if let DiffChange::Add(_) = diff.diff {
+                    let last_key = diff.path.last().unwrap();
+                    // just for PathElem::Key
+                    if let PathElem::Key(str_key) = last_key {
+                        let parent_path = diff.path.parent_path().unwrap();
+                        let keys = child_added_keys.entry(parent_path).or_insert_with(Vec::new);
+                        keys.push(str_key.to_owned());
+                    }
                 }
+                path2obj_change.insert(diff.path, diff.diff);
             }
-            path2change.insert(diff.path, diff.diff);
         }
         Self {
-            path2change,
+            path2obj_change,
             child_added_keys,
+            path2arr_change,
         }
     }
 
@@ -213,7 +261,11 @@ impl JsonDiff {
     }
 
     pub fn get_diffchange(&self, path: &Path) -> Option<&DiffChange> {
-        self.path2change.get(path)
+        self.path2obj_change.get(path)
+    }
+
+    pub fn get_arr_changes(&self, path: &Path) -> Option<&Vec<DiffElem>> {
+        self.path2arr_change.get(path)
     }
 }
 
