@@ -4,6 +4,8 @@ use console::Style;
 use jsondiff::DiffChange;
 use jsondiff::JsonDiff;
 use jsondiff::Path;
+use jsonpatch::JsonPatch;
+use jsonpatch::PatchElem;
 use serde_json::Value;
 use std::fs;
 use std::process;
@@ -274,8 +276,8 @@ enum Commands {
     },
 
     Patch {
-        left_json: String,
-        right_json: String,
+        original_json: String,
+        patch_json: String,
     },
 }
 
@@ -305,9 +307,15 @@ fn main() -> Result<()> {
             format_json_loop(&v, &Path::empty(), &json_diffs, 1, &mut output_mut);
         }
         Commands::Patch {
-            left_json,
-            right_json,
-        } => todo!(),
+            original_json,
+            patch_json,
+        } => {
+            let patch_str = read_json_file(&patch_json);
+            let jp: JsonPatch = JsonPatch::try_from(patch_str)?;
+            let original_json_str = read_json_file(&original_json);
+            let res = jp.apply(&serde_json::from_str(&original_json_str)?)?;
+            println!("{}", serde_json::to_string_pretty(&res)?);
+        }
     }
     Ok(())
 }
