@@ -217,17 +217,17 @@ impl DiffChange {
 pub struct JsonDiff {
     path2obj_change: HashMap<Path, DiffChange>,
     child_added_keys: HashMap<Path, Vec<String>>,
-    path2arr_change: HashMap<Path, Vec<DiffElem>>,
+    path2arr_changes: HashMap<Path, Vec<DiffElem>>,
 }
 
 impl JsonDiff {
     fn new(diffs: Vec<DiffElem>) -> Self {
         let mut path2obj_change = HashMap::new();
         let mut child_added_keys = HashMap::new();
-        let mut path2arr_change = HashMap::new();
+        let mut path2arr_changes = HashMap::new();
         for diff in diffs {
             if diff.path.is_arr_path() {
-                let arr_changes = path2arr_change
+                let arr_changes = path2arr_changes
                     .entry(diff.path.parent_path().unwrap())
                     .or_insert_with(Vec::new);
                 arr_changes.push(diff);
@@ -247,7 +247,7 @@ impl JsonDiff {
         Self {
             path2obj_change,
             child_added_keys,
-            path2arr_change,
+            path2arr_changes,
         }
     }
 
@@ -265,7 +265,7 @@ impl JsonDiff {
     }
 
     pub fn get_arr_changes(&self, path: &Path) -> Option<&Vec<DiffElem>> {
-        self.path2arr_change.get(path)
+        self.path2arr_changes.get(path)
     }
 }
 
