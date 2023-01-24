@@ -185,12 +185,12 @@ fn format_json_loop<F>(
                                     diffchange_idx += 1;
                                 }
                                 DiffChange::Remove(_) => {
-                                    let mut last_remove_idx =
-                                        arr_changes[diffchange_idx].path.arr_idx().unwrap() - 1;
+                                    let mut curr_remove_idx = 
+                                        arr_changes[diffchange_idx].path.arr_idx().unwrap();
                                     while diffchange_idx < arr_changes.len()
                                         && arr_changes[diffchange_idx].diff.is_remove()
                                         && arr_changes[diffchange_idx].path.arr_idx().unwrap()
-                                            == last_remove_idx + 1
+                                            == curr_remove_idx
                                     {
                                         let diff_change = &arr_changes[diffchange_idx];
                                         let remove_val = diff_change.diff.as_remove().unwrap();
@@ -207,7 +207,7 @@ fn format_json_loop<F>(
                                         old_idx += 1;
                                         new_len -= 1;
                                         diffchange_idx += 1;
-                                        last_remove_idx += 1;
+                                        curr_remove_idx += 1;
                                     }
                                 }
                             }
