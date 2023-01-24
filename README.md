@@ -9,22 +9,37 @@ Diff & patch json object.
 # Usage
 
 ```
-jsondiffpatch-cli [Operation] [left.json] [right.json]
-```
+USAGE:
+    jsondiffpath-cli <SUBCOMMAND>
 
-**Operation** can be *diff* or *patch*
+OPTIONS:
+    -h, --help    Print help information
+
+SUBCOMMANDS:
+    diff     diff two json file
+    help     Print this message or the help of the given subcommand(s)
+    patch    patch a json object with a patch document
+```
 
 ### diff
 
-Compare left.json and right.json 
-
 ```
-jsondiffpatch-cli diff [left.json] [right.json]
+diff two json file
+
+USAGE:
+    jsondiffpath-cli diff <LEFT_JSON> <RIGHT_JSON>
+
+ARGS:
+    <LEFT_JSON>
+    <RIGHT_JSON>
+
+OPTIONS:
+    -h, --help    Print help information
 ```
 
 #### e.g.
 
-left:
+LEFT_JSON:
 
 ```json
 {
@@ -35,7 +50,7 @@ left:
 }
 ```
 
-right:
+RIGHT_JSON:
 
 ```json
 {
@@ -48,13 +63,24 @@ right:
 
 diff:
 
-![image-20230124003804101](/Users/nero/Library/Application Support/typora-user-images/image-20230124003804101.png)
+![diff_example.png](/Users/nero/local_dev/self_project/jd-rs/imgs/diff_example.png)
 
 ### patch
 
-left.json is the base file to apply to the patch
+```
+USAGE:
+    jsondiffpath-cli patch <ORIGINAL_JSON> <PATCH_JSON>
 
-right.json is the patch file to apply to the base json (followed by JSON-Patch [RFC6902](http://tools.ietf.org/html/rfc6902))
+ARGS:
+    <ORIGINAL_JSON>
+    <PATCH_JSON>
+
+OPTIONS:
+```
+
+<ORIGINAL_JSON> is the base file to apply to the patch
+
+<PATCH_JSON> is the patch file to apply to the base json (followed by JSON-Patch [RFC6902](http://tools.ietf.org/html/rfc6902))
 
 ```
 jsondiffpatch-cli patch [left.json] [right.json]
@@ -62,7 +88,7 @@ jsondiffpatch-cli patch [left.json] [right.json]
 
 #### e.g.
 
-left.json (base json):
+ORIGINAL_JSON:
 
 ```json
 {
@@ -71,7 +97,7 @@ left.json (base json):
 }
 ```
 
-right.json (patch file):
+PATCH_JSON:
 
 ```json
 [
