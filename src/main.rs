@@ -132,12 +132,6 @@ fn format_json_loop<F>(
                 output(" ", &right_brace)
             }
             Value::Array(arr) => {
-                // if let Some(arr_changes) = json_diffs.get_arr_changes(curr_path) {
-                //     let mut old_idx: usize = 0;
-                //     let mut new_idx: usize = 0;
-                //     let mut new_len = arr.len();
-                //     for
-                // }
                 let left_bracket = format!("{}{}{}", " ", indent_key, "[");
                 output(" ", &left_bracket);
 
@@ -147,7 +141,10 @@ fn format_json_loop<F>(
                 let mut new_idx: usize = 0;
                 let mut new_len = arr.len();
                 let mut diffchange_idx: usize = 0;
-                while new_idx < new_len {
+                while new_idx < new_len
+                    || (new_idx >= new_len && diffchange_idx < arr_changes.len())
+                // when adding to the end of the arr
+                {
                     if diffchange_idx < arr_changes.len() {
                         let diff_change = &arr_changes[diffchange_idx];
                         let idx = diff_change.path.arr_idx().unwrap();
