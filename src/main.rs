@@ -185,7 +185,7 @@ fn format_json_loop<F>(
                                     diffchange_idx += 1;
                                 }
                                 DiffChange::Remove(_) => {
-                                    let mut curr_remove_idx = 
+                                    let mut curr_remove_idx =
                                         arr_changes[diffchange_idx].path.arr_idx().unwrap();
                                     while diffchange_idx < arr_changes.len()
                                         && arr_changes[diffchange_idx].diff.is_remove()
@@ -270,11 +270,13 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    /// diff two json file
     Diff {
         left_json: String,
         right_json: String,
     },
 
+    /// patch a json object with a patch document
     Patch {
         original_json: String,
         patch_json: String,
