@@ -2,6 +2,8 @@
 name = "jsonpatch_rs"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "JSON Patch implementation in Rust"
 homepage = "https://github.com/Nero5023/jsondiffpatch.rs"
 authors = ["Nero5023 <nero5023@gmail.com>", "WangZhuo2015 <zhuowangwork@gmail.com>"]
 repository = "https://github.com/Nero5023/jsondiffpatch.rs"
