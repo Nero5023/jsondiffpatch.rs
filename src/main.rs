@@ -5,11 +5,9 @@ use jsondiff::DiffChange;
 use jsondiff::JsonDiff;
 use jsondiff::Path;
 use jsonpatch::JsonPatch;
-use jsonpatch::PatchElem;
 use serde_json::Value;
 use std::fs;
 use std::process;
-use std::unreachable;
 
 const INDENT_SIZE: usize = 4;
 

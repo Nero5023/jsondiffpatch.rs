@@ -23,9 +23,9 @@ clap = { version = "^3.2.16", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 anyhow = "1.0"
 thiserror = "1.0"
-jsonptr = { path= "crates/jsonptr_rs", package="jsonptr_rs" }
-jsondiff = { path="crates/jsondiff_rs", package="jsondiff_rs" }
-jsonpatch = { path="crates/jsonpatch_rs", package="jsonpatch_rs" }
+jsonptr = {version = "0.1.0", package="jsonptr_rs" }
+jsondiff = {version = "0.1.0", package="jsondiff_rs" }
+jsonpatch = {version = "0.1.0", package="jsonpatch_rs" }
 
 [workspace]
 members = [
