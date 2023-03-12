@@ -145,7 +145,7 @@ dependencies = [
  "console",
  "jsondiff_rs",
  "jsonpatch_rs",
- "jsonptr",
+ "jsonptr_rs",
  "serde",
  "serde_json",
  "thiserror",
@@ -156,14 +156,14 @@ name = "jsonpatch_rs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "jsonptr",
+ "jsonptr_rs",
  "serde",
  "serde_json",
  "thiserror",
 ]
 
 [[package]]
-name = "jsonptr"
+name = "jsonptr_rs"
 version = "0.1.0"
 dependencies = [
  "anyhow",

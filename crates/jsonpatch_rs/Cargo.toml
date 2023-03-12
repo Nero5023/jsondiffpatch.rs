@@ -13,7 +13,7 @@ keywords = ["json", "diff", "patch"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-jsonptr = { path = "../jsonptr" }
+jsonptr = { path = "../jsonptr_rs", package="jsonptr_rs"}
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
